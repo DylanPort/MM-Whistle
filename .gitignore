@@ -16,9 +16,8 @@ node_modules/
 Thumbs.db
 
 # Secrets
-*.json
-!package.json
-!tsconfig.json
+*-keypair.json
+playground-wallet.json
 
 # Logs
 *.log

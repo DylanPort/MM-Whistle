@@ -1,0 +1,354 @@
+{
+  "version": "2.0.0",
+  "name": "mm_wallet_v2",
+  "metadata": {
+    "address": "4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5",
+    "description": "Market Making Wallet for Pump.fun and PumpSwap trading",
+    "repository": "https://github.com/DylanPort/whistle"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "docs": ["Initialize a new MM wallet for a user"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false, "pda": { "seeds": ["mm_wallet", "owner", "nonce"] } },
+        { "name": "pdaWallet", "isMut": false, "isSigner": false, "docs": ["PDA for holding SOL"] },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "nonce", "type": "u64" },
+        { "name": "lockSeconds", "type": "i64" },
+        { "name": "strategy", "type": { "defined": "Strategy" } },
+        { "name": "config", "type": { "defined": "StrategyConfig" } },
+        { "name": "operator", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "deposit",
+      "docs": ["Deposit SOL into the MM wallet PDA"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": false, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "docs": ["Withdraw SOL from the MM wallet (owner only, after lock expires)"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": false, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "destination", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdrawTokens",
+      "docs": ["Withdraw all tokens from the MM wallet (owner only, after lock expires)"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": false, "isSigner": false },
+        { "name": "pdaWallet", "isMut": false, "isSigner": false },
+        { "name": "pdaTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "ownerTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenMint", "isMut": false, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "executeBuy",
+      "docs": ["Execute a buy on Pump.fun bonding curve"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "targetProgram", "isMut": false, "isSigner": false, "docs": ["Must be Pump.fun program"] },
+        { "name": "caller", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "amountLamports", "type": "u64" },
+        { "name": "expectedTokens", "type": "u64" }
+      ]
+    },
+    {
+      "name": "executeSell",
+      "docs": ["Execute a sell on Pump.fun bonding curve"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "targetProgram", "isMut": false, "isSigner": false, "docs": ["Must be Pump.fun program"] },
+        { "name": "caller", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "tokenAmount", "type": "u64" },
+        { "name": "expectedSol", "type": "u64" }
+      ]
+    },
+    {
+      "name": "executeSwap",
+      "docs": ["Execute a swap on PumpSwap AMM (for migrated tokens)"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "targetProgram", "isMut": false, "isSigner": false, "docs": ["Must be PumpSwap program"] },
+        { "name": "caller", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "amountIn", "type": "u64" },
+        { "name": "expectedOut", "type": "u64" },
+        { "name": "isBuy", "type": "bool" }
+      ]
+    },
+    {
+      "name": "claimFees",
+      "docs": ["Claim creator fees from Pump.fun"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "caller", "isMut": false, "isSigner": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "createToken",
+      "docs": ["Create a new token on Pump.fun with PDA as creator"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true }
+      ],
+      "args": [
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" },
+        { "name": "uri", "type": "string" }
+      ]
+    },
+    {
+      "name": "setTokenMint",
+      "docs": ["Set the token mint after creation (owner only, one-time)"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "tokenMintAccount", "isMut": false, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "updateStrategy",
+      "docs": ["Update trading strategy"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "strategy", "type": { "defined": "Strategy" } },
+        { "name": "config", "type": { "defined": "StrategyConfig" } }
+      ]
+    },
+    {
+      "name": "setOperator",
+      "docs": ["Update authorized operator"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "newOperator", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "pause",
+      "docs": ["Pause trading"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "resume",
+      "docs": ["Resume trading"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "extendLock",
+      "docs": ["Extend lock period (can only increase, never decrease)"],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "additionalSeconds", "type": "i64" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MmWallet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "version", "type": "u8" },
+          { "name": "bump", "type": "u8" },
+          { "name": "owner", "type": "publicKey" },
+          { "name": "operator", "type": "publicKey" },
+          { "name": "tokenMint", "type": "publicKey" },
+          { "name": "nonce", "type": "u64" },
+          { "name": "strategy", "type": { "defined": "Strategy" } },
+          { "name": "config", "type": { "defined": "StrategyConfig" } },
+          { "name": "lockUntil", "type": "i64" },
+          { "name": "paused", "type": "bool" },
+          { "name": "isCreator", "type": "bool" },
+          { "name": "totalVolume", "type": "u64" },
+          { "name": "totalTrades", "type": "u64" },
+          { "name": "totalFeesClaimed", "type": "u64" },
+          { "name": "lastTrade", "type": "i64" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "reserved", "type": { "array": ["u8", 64] } }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "Strategy",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "VolumeBot" },
+          { "name": "PriceReactive" },
+          { "name": "GridTrading" },
+          { "name": "TrendFollower" },
+          { "name": "SpreadMM" },
+          { "name": "PumpHunter" }
+        ]
+      }
+    },
+    {
+      "name": "StrategyConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "tradeSizePct", "type": "u8", "docs": ["Trade size as percentage of balance (1-50)"] },
+          { "name": "minDelaySecs", "type": "u16", "docs": ["Minimum delay between trades in seconds"] },
+          { "name": "maxDelaySecs", "type": "u16", "docs": ["Maximum delay between trades in seconds"] },
+          { "name": "slippageBps", "type": "u16", "docs": ["Slippage tolerance in basis points (10-5000)"] },
+          { "name": "param1", "type": "u16", "docs": ["Strategy-specific parameter 1"] },
+          { "name": "param2", "type": "u16", "docs": ["Strategy-specific parameter 2"] },
+          { "name": "param3", "type": "u16", "docs": ["Strategy-specific parameter 3"] },
+          { "name": "reserved", "type": { "array": ["u8", 32] } }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "WalletInitialized",
+      "fields": [
+        { "name": "owner", "type": "publicKey", "index": false },
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "lockUntil", "type": "i64", "index": false },
+        { "name": "strategy", "type": "u8", "index": false }
+      ]
+    },
+    {
+      "name": "Deposited",
+      "fields": [
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "depositor", "type": "publicKey", "index": false },
+        { "name": "amount", "type": "u64", "index": false }
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "fields": [
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "owner", "type": "publicKey", "index": false },
+        { "name": "amount", "type": "u64", "index": false }
+      ]
+    },
+    {
+      "name": "TradeExecuted",
+      "fields": [
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "tradeType", "type": "u8", "index": false },
+        { "name": "amountIn", "type": "u64", "index": false },
+        { "name": "minAmountOut", "type": "u64", "index": false },
+        { "name": "timestamp", "type": "i64", "index": false }
+      ]
+    },
+    {
+      "name": "FeesClaimed",
+      "fields": [
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "amount", "type": "u64", "index": false },
+        { "name": "timestamp", "type": "i64", "index": false }
+      ]
+    },
+    {
+      "name": "StrategyUpdated",
+      "fields": [
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "oldStrategy", "type": "u8", "index": false },
+        { "name": "newStrategy", "type": "u8", "index": false }
+      ]
+    },
+    {
+      "name": "OperatorChanged",
+      "fields": [
+        { "name": "wallet", "type": "publicKey", "index": false },
+        { "name": "oldOperator", "type": "publicKey", "index": false },
+        { "name": "newOperator", "type": "publicKey", "index": false }
+      ]
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "Unauthorized", "msg": "Unauthorized: Only the owner can perform this action" },
+    { "code": 6001, "name": "UnauthorizedOperator", "msg": "Unauthorized: Caller is not owner or authorized operator" },
+    { "code": 6002, "name": "WalletLocked", "msg": "Wallet is locked until the specified time" },
+    { "code": 6003, "name": "TradingPaused", "msg": "Trading is currently paused" },
+    { "code": 6004, "name": "InvalidLockDuration", "msg": "Invalid lock duration (0 to 365 days)" },
+    { "code": 6005, "name": "LockTooLong", "msg": "Total lock period exceeds maximum (5 years)" },
+    { "code": 6006, "name": "InvalidTradeSize", "msg": "Invalid trade size percentage (must be 1-50)" },
+    { "code": 6007, "name": "InvalidSlippage", "msg": "Invalid slippage (must be 10-5000 bps / 0.1% - 50%)" },
+    { "code": 6008, "name": "InsufficientBalance", "msg": "Insufficient balance for trade" },
+    { "code": 6009, "name": "TradeExceedsMax", "msg": "Trade amount exceeds maximum allowed percentage" },
+    { "code": 6010, "name": "InvalidProgram", "msg": "Invalid program for CPI call" },
+    { "code": 6011, "name": "TokenMintMismatch", "msg": "Token mint mismatch" },
+    { "code": 6012, "name": "AlreadyInitialized", "msg": "Wallet already initialized for this nonce" },
+    { "code": 6013, "name": "TokenNotCreated", "msg": "Token not yet created for this wallet" },
+    { "code": 6014, "name": "TokenMintAlreadySet", "msg": "Token mint already set" },
+    { "code": 6015, "name": "InvalidWithdrawDestination", "msg": "Cannot withdraw to different address" },
+    { "code": 6016, "name": "BelowRentReserve", "msg": "Must keep minimum rent reserve (0.01 SOL)" },
+    { "code": 6017, "name": "MathOverflow", "msg": "Arithmetic overflow" },
+    { "code": 6018, "name": "InvalidDelayConfig", "msg": "Invalid delay configuration (min > max)" },
+    { "code": 6019, "name": "TradeTooSoon", "msg": "Trade rate limit exceeded - wait for cooldown" },
+    { "code": 6020, "name": "ZeroDeposit", "msg": "Deposit amount must be greater than zero" },
+    { "code": 6021, "name": "InvalidMintAccount", "msg": "Invalid token mint account" },
+    { "code": 6022, "name": "InvalidOperator", "msg": "Operator cannot be zero address" }
+  ],
+  "constants": [
+    { "name": "PUMP_FUN_PROGRAM", "type": "publicKey", "value": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P" },
+    { "name": "PUMPSWAP_PROGRAM", "type": "publicKey", "value": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA" },
+    { "name": "MIN_RENT_RESERVE", "type": "u64", "value": "10000000" },
+    { "name": "MAX_TRADE_PCT", "type": "u8", "value": "50" },
+    { "name": "MIN_SLIPPAGE_BPS", "type": "u16", "value": "10" },
+    { "name": "MAX_SLIPPAGE_BPS", "type": "u16", "value": "5000" },
+    { "name": "MAX_LOCK_SECONDS", "type": "i64", "value": "31536000" },
+    { "name": "MAX_TOTAL_LOCK_SECONDS", "type": "i64", "value": "157680000" }
+  ]
+}
+
