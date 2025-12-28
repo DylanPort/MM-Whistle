@@ -151,7 +151,7 @@ await program.methods
 | Program | ID | Usage |
 |---------|-----|-------|
 | **Pump.fun** | `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P` | Token creation, bonding curve |
-| **PumpSwap** | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA` | AMM swaps |
+| **PumpSwap** | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA` | AMM swaps 
 
 ## ⚙️ Configuration Limits
 
