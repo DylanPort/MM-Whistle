@@ -1,0 +1,22 @@
+[package]
+name = "mm-wallet-v2"
+version = "0.1.0"
+description = "MM Wallet Program v2.0 - Market Making on Pump.fun"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mm_wallet_v2"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = []
+
+[dependencies]
+anchor-lang = "0.28.0"
+anchor-spl = "0.28.0"
+
