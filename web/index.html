@@ -3005,12 +3005,29 @@
                 return;
             }
             
-            const amount = prompt('Enter amount to withdraw (SOL):', S.walletBalance.toFixed(4));
+            // Contract requires 0.01 SOL rent reserve
+            const RENT_RESERVE = 0.01;
+            const maxWithdrawable = Math.max(0, S.walletBalance - RENT_RESERVE);
+            
+            if (maxWithdrawable <= 0) {
+                showError(`Cannot withdraw: Balance (${S.walletBalance.toFixed(4)} SOL) must stay above ${RENT_RESERVE} SOL rent reserve.`);
+                return;
+            }
+            
+            const amount = prompt(
+                `Enter amount to withdraw (SOL):\n\nBalance: ${S.walletBalance.toFixed(4)} SOL\nRent Reserve: ${RENT_RESERVE} SOL\nMax Withdrawable: ${maxWithdrawable.toFixed(4)} SOL`, 
+                maxWithdrawable.toFixed(4)
+            );
             if (!amount) return;
             
             const amountNum = parseFloat(amount);
             if (!amountNum || amountNum <= 0) {
                 showError('Invalid amount');
+                return;
+            }
+            
+            if (amountNum > maxWithdrawable) {
+                showError(`Cannot withdraw ${amountNum} SOL.\n\nMax withdrawable: ${maxWithdrawable.toFixed(4)} SOL\n(Must keep ${RENT_RESERVE} SOL rent reserve)`);
                 return;
             }
             
@@ -3056,7 +3073,12 @@
                 
             } catch (e) {
                 console.error('[Contract] Withdraw error:', e);
-                showError('Withdrawal failed: ' + e.message);
+                // Better error message for rent reserve error
+                if (e.message.includes('BelowRentReserve') || e.message.includes('6016')) {
+                    showError(`Withdrawal failed: Must keep at least 0.01 SOL rent reserve in the vault.`);
+                } else {
+                    showError('Withdrawal failed: ' + e.message);
+                }
             }
         }
         
