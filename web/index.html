@@ -2113,33 +2113,49 @@
             addLog('Wallet disconnected', 'info');
         }
         
-        // Check if already connected on page load
+        // Check if already connected on page load - try silent reconnect
         async function checkWalletConnection() {
-            // Try to reconnect to last used wallet
+            // Try to reconnect to last used wallet with silent connect
             const lastWalletId = localStorage.getItem('lastWalletId');
             if (lastWalletId) {
                 const walletConfig = SUPPORTED_WALLETS.find(w => w.id === lastWalletId);
                 if (walletConfig) {
                     const provider = walletConfig.getProvider();
-                    if (provider?.isConnected && provider.publicKey) {
-                        const pubkey = provider.publicKey.toString();
-                        S.ownerWallet = pubkey;
-                        connectedProvider = provider;
-                        connectedWalletId = lastWalletId;
-                        
-                        document.getElementById('authOverlay').classList.add('hidden');
-                        document.getElementById('btnConnectWallet').classList.add('hidden');
-                        document.getElementById('connectedWallet').classList.remove('hidden');
-                        document.getElementById('phantomAddr').textContent = pubkey.slice(0, 4) + '...' + pubkey.slice(-4);
-                        document.getElementById('walletIcon').src = walletConfig.icon;
-                        
-                        console.log(`[Wallet] Auto-reconnected via ${walletConfig.name}:`, pubkey);
-                        return true;
+                    if (provider) {
+                        try {
+                            // Try silent connect (only works if user previously approved)
+                            let pubkey;
+                            if (provider.isConnected && provider.publicKey) {
+                                pubkey = provider.publicKey.toString();
+                            } else if (provider.connect) {
+                                // Attempt silent reconnect - won't show popup if already trusted
+                                const resp = await provider.connect({ onlyIfTrusted: true });
+                                pubkey = resp.publicKey.toString();
+                            }
+                            
+                            if (pubkey) {
+                                S.ownerWallet = pubkey;
+                                connectedProvider = provider;
+                                connectedWalletId = lastWalletId;
+                                
+                                document.getElementById('authOverlay').classList.add('hidden');
+                                document.getElementById('btnConnectWallet').classList.add('hidden');
+                                document.getElementById('connectedWallet').classList.remove('hidden');
+                                document.getElementById('phantomAddr').textContent = pubkey.slice(0, 4) + '...' + pubkey.slice(-4);
+                                document.getElementById('walletIcon').src = walletConfig.icon;
+                                
+                                console.log(`[Wallet] Auto-reconnected via ${walletConfig.name}:`, pubkey);
+                                return true;
+                            }
+                        } catch (e) {
+                            // Silent connect failed - user needs to manually connect
+                            console.log(`[Wallet] Silent reconnect failed for ${walletConfig.name}:`, e.message);
+                        }
                     }
                 }
             }
             
-            // Check all providers for active connection
+            // Fallback: Check all providers for active connection
             for (const walletConfig of SUPPORTED_WALLETS) {
                 try {
                     const provider = walletConfig.getProvider();
@@ -2155,6 +2171,7 @@
                         document.getElementById('phantomAddr').textContent = pubkey.slice(0, 4) + '...' + pubkey.slice(-4);
                         document.getElementById('walletIcon').src = walletConfig.icon;
                         
+                        localStorage.setItem('lastWalletId', walletConfig.id);
                         console.log(`[Wallet] Found active ${walletConfig.name} connection:`, pubkey);
                         return true;
                     }
