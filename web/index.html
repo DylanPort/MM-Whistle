@@ -1,0 +1,4595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MM.WHISTLE - Market Maker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-void: #030304;
+            --bg-deep: #070709;
+            --bg-surface: #0c0c0f;
+            --bg-elevated: #111115;
+            --bg-glass: rgba(15, 15, 20, 0.8);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-medium: rgba(255, 255, 255, 0.1);
+            --border-glow: rgba(201, 162, 39, 0.4);
+            --text-white: #f4f4f5;
+            --text-gray: #9898a0;
+            --text-muted: #5c5c65;
+            --gold: #c9a227;
+            --gold-light: #ddb93d;
+            --gold-dark: #8a7019;
+            --emerald: #10b981;
+            --red: #ef4444;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes reveal-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: var(--bg-void);
+            color: var(--text-white);
+            min-height: 100vh;
+            position: relative;
+            line-height: 1.5;
+        }
+
+        /* === ATMOSPHERIC BACKGROUND === */
+        .atmosphere {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .atmosphere::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -25%;
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(ellipse, rgba(201, 162, 39, 0.15) 0%, transparent 70%);
+            animation: pulse-glow 8s ease-in-out infinite;
+            filter: blur(60px);
+        }
+
+        .atmosphere::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            right: -20%;
+            width: 70%;
+            height: 70%;
+            background: radial-gradient(ellipse, rgba(16, 185, 129, 0.12) 0%, transparent 70%);
+            animation: pulse-glow 10s ease-in-out infinite 2s;
+            opacity: 0.3;
+            filter: blur(80px);
+        }
+
+        /* Floating orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            animation: float 12s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            top: 20%;
+            left: 10%;
+            width: 300px;
+            height: 300px;
+            background: var(--gold);
+            opacity: 0.08;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            top: 60%;
+            right: 15%;
+            width: 250px;
+            height: 250px;
+            background: var(--emerald);
+            opacity: 0.06;
+            animation-delay: -4s;
+        }
+
+        .orb-3 {
+            bottom: 20%;
+            left: 30%;
+            width: 200px;
+            height: 200px;
+            background: #fff;
+            opacity: 0.03;
+            animation-delay: -8s;
+        }
+
+        /* Grid pattern overlay */
+        .grid-pattern {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        header {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo { 
+            font-size: 22px; 
+            font-weight: 700; 
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo img {
+            height: 36px;
+            width: auto;
+        }
+        .logo .mm { 
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .logo .whistle { color: var(--text-white); }
+
+        .main { max-width: 940px; margin: 0 auto; padding: 32px 24px; position: relative; z-index: 1; }
+
+        /* Steps nav - horizontal */
+        .steps-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 28px;
+            animation: reveal-up 0.6s ease-out;
+        }
+
+        .step-btn {
+            flex: 1;
+            padding: 14px 16px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--gold) 0%, var(--gold-dark) 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .step-btn.active {
+            border-color: var(--gold);
+            color: var(--text-white);
+            background: var(--bg-elevated);
+            box-shadow: 0 4px 20px rgba(201, 162, 39, 0.15);
+        }
+
+        .step-btn.active::before {
+            transform: scaleX(1);
+        }
+
+        .step-btn.done { 
+            border-color: var(--emerald); 
+            background: rgba(16, 185, 129, 0.1);
+        }
+        .step-btn.done::before {
+            background: var(--emerald);
+            transform: scaleX(1);
+        }
+
+        .step-btn:hover:not(.active):not(.done) { 
+            background: var(--bg-elevated); 
+            border-color: var(--border-medium);
+        }
+        .step-num { 
+            font-size: 10px; 
+            color: var(--text-muted); 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .step-name { 
+            font-size: 13px; 
+            margin-top: 4px; 
+            font-weight: 500;
+        }
+
+        /* Content panels */
+        .panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            margin-bottom: 20px;
+            animation: reveal-up 0.5s ease-out;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .panel:hover {
+            border-color: var(--border-medium);
+        }
+
+        .panel-head {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 12px;
+            color: var(--text-gray);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .panel-body { padding: 20px; }
+
+        .info {
+            background: rgba(201, 162, 39, 0.08);
+            border-left: 3px solid var(--gold);
+            border-radius: 0 10px 10px 0;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: var(--text-gray);
+            line-height: 1.6;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            color: var(--text-white);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus, select:focus { 
+            outline: none; 
+            border-color: var(--gold); 
+            box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.15);
+        }
+        input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary { 
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%); 
+            color: var(--bg-void); 
+            box-shadow: 0 4px 15px rgba(201, 162, 39, 0.3);
+        }
+        .btn-primary:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(201, 162, 39, 0.4);
+        }
+        .btn-secondary { 
+            background: var(--bg-elevated); 
+            color: var(--text-white); 
+            border: 1px solid var(--border-medium);
+        }
+        .btn-secondary:hover { 
+            background: var(--bg-surface);
+            border-color: var(--gold);
+        }
+        .btn-success { 
+            background: linear-gradient(135deg, var(--emerald) 0%, #059669 100%); 
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(16, 185, 129, 0.4);
+        }
+        .btn-danger { 
+            background: linear-gradient(135deg, var(--red) 0%, #dc2626 100%); 
+            color: white;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+        .btn-danger:hover {
+            transform: translateY(-2px);
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        .btn-block { width: 100%; }
+
+        .btn.loading {
+            position: relative;
+            color: transparent;
+        }
+        .btn.loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .row { display: flex; gap: 16px; }
+        .row > * { flex: 1; }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat {
+            background: #2d2d2d;
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .stat-label { font-size: 10px; color: #707070; text-transform: uppercase; }
+        .stat-value { font-size: 18px; font-weight: 600; margin-top: 4px; transition: color 0.3s ease; }
+        .stat-value.green { color: #5cb85c; }
+        
+        /* Wallet Connection */
+        .btn-connect {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+            color: var(--bg-void);
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(201, 162, 39, 0.3);
+        }
+        .btn-connect:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(201, 162, 39, 0.4);
+        }
+        .btn-connect:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        
+        .connected-wallet {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-surface);
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--emerald);
+        }
+        .wallet-addr {
+            font-size: 12px;
+            color: var(--emerald);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        .btn-disconnect {
+            background: none;
+            border: none;
+            color: #707070;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+        }
+        .btn-disconnect:hover { color: #d9534f; }
+        
+        /* Auth Required Overlay */
+        .auth-required {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(3, 3, 4, 0.95);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .auth-required h2 {
+            color: var(--text-white);
+            margin-bottom: 16px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .auth-required p {
+            color: var(--text-gray);
+            margin-bottom: 28px;
+            text-align: center;
+            max-width: 420px;
+            line-height: 1.7;
+        }
+        .auth-required .btn-connect {
+            padding: 14px 40px;
+            font-size: 16px;
+        }
+        
+        /* Wallet Selector Modal */
+        .wallet-selector-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(3, 3, 4, 0.9);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+            animation: reveal-up 0.3s ease-out;
+        }
+        .wallet-selector-modal.hidden { display: none; }
+        .wallet-selector {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-medium);
+            border-radius: 20px;
+            padding: 28px;
+            width: 380px;
+            max-width: 90vw;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+        }
+        .wallet-selector h3 {
+            margin: 0 0 20px 0;
+            color: var(--text-white);
+            font-size: 20px;
+            text-align: center;
+            font-weight: 700;
+        }
+        .wallet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .wallet-option {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+        }
+        .wallet-option:hover {
+            background: var(--bg-deep);
+            border-color: var(--gold);
+            transform: translateX(4px);
+        }
+        .wallet-option.wallet-install {
+            opacity: 0.6;
+        }
+        .wallet-option.wallet-install:hover {
+            opacity: 1;
+        }
+        .wallet-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            object-fit: contain;
+            background: #1a1a1a;
+            padding: 4px;
+        }
+        .wallet-name {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-white);
+        }
+        .wallet-status {
+            font-size: 11px;
+            color: #707070;
+        }
+        .wallet-status.detected {
+            color: #14F195;
+        }
+        .wallet-selector-close {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .wallet-selector-close:hover {
+            background: var(--bg-deep);
+            border-color: var(--border-medium);
+            color: var(--text-white);
+        }
+        
+        /* Connected wallet icon */
+        .connected-wallet img.wallet-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        /* Strategy Selection Grid */
+        .strategies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 12px;
+        }
+
+        .strategy-card {
+            background: #2d2d2d;
+            border: 2px solid #3d3d3d;
+            border-radius: 6px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .strategy-card:hover {
+            border-color: #505050;
+            background: #363636;
+        }
+
+        .strategy-card.selected {
+            border-color: #e07a3a;
+            background: #3a2820;
+        }
+
+        .strategy-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e8e8e8;
+            margin-bottom: 6px;
+        }
+
+        .strategy-desc {
+            font-size: 11px;
+            color: #a0a0a0;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .strategy-difficulty {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .strategy-difficulty.beginner { background: #2d5a2d; color: #7ddc7d; }
+        .strategy-difficulty.intermediate { background: #5a5a2d; color: #dcdc7d; }
+        .strategy-difficulty.advanced { background: #5a2d2d; color: #dc7d7d; }
+        .stat-value.red { color: #d9534f; }
+
+        /* Token Intelligence Panel */
+        .token-info-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .token-info-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .token-mint {
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            color: #e07a3a;
+            background: #2d2d2d;
+            padding: 6px 12px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+
+        .token-meta {
+            display: flex;
+            gap: 8px;
+        }
+
+        .pool-badge {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: #2d4a5a;
+            color: #7db8dc;
+            text-transform: uppercase;
+        }
+
+        .pool-badge.bonding { background: #2d5a4a; color: #7ddcb8; }
+        .pool-badge.pumpswap { background: #5a4a2d; color: #dcb87d; }
+
+        .grad-badge {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: #3d3d3d;
+            color: #a0a0a0;
+        }
+
+        .grad-badge.graduated { background: #5a2d5a; color: #dc7ddc; }
+        .grad-badge.active { background: #2d5a2d; color: #7ddc7d; }
+
+        .token-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        @media (max-width: 700px) {
+            .token-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .token-stat {
+            background: #2d2d2d;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .token-stat-label {
+            font-size: 9px;
+            color: #707070;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .token-stat-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #e8e8e8;
+        }
+
+        .token-stat-value.large {
+            font-size: 20px;
+            color: #5cb85c;
+        }
+
+        .token-stat-sub {
+            font-size: 11px;
+            color: #707070;
+            margin-top: 2px;
+        }
+
+        .token-update-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+            border-top: 1px solid #3d3d3d;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 11px;
+        }
+
+        .copy-row { display: flex; gap: 8px; }
+        .copy-row input { flex: 1; margin-bottom: 0; }
+        .copy-row .btn { flex-shrink: 0; }
+
+        .log {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            height: 280px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .log-item {
+            padding: 8px 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.2s ease;
+        }
+
+        .log-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .log-time { 
+            color: var(--text-muted); 
+            margin-right: 12px; 
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+        }
+        .log-msg { color: var(--text-gray); }
+        .log-item.trade .log-msg { color: var(--emerald); }
+        
+        /* Buy/Sell logs */
+        .log-item.buy { background: rgba(16, 185, 129, 0.1); }
+        .log-item.buy .log-msg { color: var(--emerald); font-weight: 600; }
+        .log-item.sell { background: rgba(239, 68, 68, 0.1); }
+        .log-item.sell .log-msg { color: var(--red); font-weight: 600; }
+        
+        /* Cycle logs - highlighted start/end */
+        .log-item.cycle { 
+            background: rgba(201, 162, 39, 0.12); 
+            border-left: 3px solid var(--gold);
+        }
+        .log-item.cycle .log-msg { color: var(--gold-light); font-weight: 600; }
+        
+        /* Transaction signature logs */
+        .log-item.tx { background: rgba(96, 165, 250, 0.08); }
+        .log-item.tx .log-msg { color: #60a5fa; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+        
+        /* Countdown/timer logs */
+        .log-item.countdown .log-msg { color: var(--text-muted); font-style: italic; }
+        
+        /* Status updates */
+        .log-item.status .log-msg { color: var(--text-gray); }
+        
+        /* Warnings */
+        .log-item.warning { background: rgba(201, 162, 39, 0.1); }
+        .log-item.warning .log-msg { color: var(--gold); }
+        
+        /* Errors */
+        .log-item.error { background: rgba(239, 68, 68, 0.1); }
+        .log-item.error .log-msg { color: var(--red); font-weight: 500; }
+        
+        /* Warnings */
+        .log-item.warn { background: rgba(245, 158, 11, 0.1); }
+        .log-item.warn .log-msg { color: #f59e0b; font-weight: 500; }
+        
+        /* Fee claims */
+        .log-item.fee { background: rgba(201, 162, 39, 0.1); }
+        .log-item.fee .log-msg { color: var(--gold); }
+        
+        /* Info */
+        .log-item.info .log-msg { color: #60a5fa; }
+
+        .hidden { display: none; }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            transition: all 0.3s ease;
+        }
+        .status-dot.on { 
+            background: var(--emerald); 
+            box-shadow: 0 0 12px var(--emerald);
+            animation: pulse-glow 2s infinite;
+        }
+        .status-dot.off { 
+            background: var(--red); 
+            box-shadow: 0 0 8px var(--red);
+        }
+
+        .btns { display: flex; gap: 8px; }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: reveal-up 0.3s ease-out;
+        }
+        .modal-overlay.hidden { display: none; }
+
+        .modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-medium);
+            border-radius: 20px;
+            max-width: 420px;
+            width: 90%;
+            padding: 28px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+            animation: reveal-up 0.4s ease-out;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 14px;
+        }
+
+        .modal-title.error { color: var(--red); }
+        .modal-title.success { color: var(--emerald); }
+        .modal-title.warning { color: var(--gold); }
+
+        .modal-body {
+            font-size: 14px;
+            color: var(--text-gray);
+            margin-bottom: 24px;
+            line-height: 1.7;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Warning box */
+        .warning {
+            background: rgba(201, 162, 39, 0.1);
+            border: 1px solid rgba(201, 162, 39, 0.3);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--gold-light);
+            line-height: 1.6;
+        }
+
+        .error-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--red);
+        }
+
+        /* Image upload */
+        .image-upload-area {
+            border: 2px dashed var(--border-medium);
+            border-radius: 14px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+            min-height: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-deep);
+        }
+        .image-upload-area:hover {
+            border-color: var(--gold);
+            background: rgba(201, 162, 39, 0.05);
+        }
+        .image-upload-area.has-image {
+            border-style: solid;
+            border-color: var(--emerald);
+            background: rgba(16, 185, 129, 0.05);
+        }
+        .upload-placeholder {
+            color: var(--text-muted);
+        }
+        #imagePreview img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+        }
+
+        /* Chart Styles */
+        .chart-container {
+            position: relative;
+            height: 320px;
+            background: var(--bg-deep);
+            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .chart-range-btn {
+            padding: 6px 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-family: 'Outfit', sans-serif;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .chart-range-btn:hover {
+            background: var(--bg-elevated);
+            color: var(--text-white);
+            border-color: var(--border-medium);
+        }
+
+        .chart-range-btn.active {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+            border-color: var(--gold);
+            color: var(--bg-void);
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 14px;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-gray);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.mcap { background: var(--emerald); }
+        .legend-dot.buy { background: var(--emerald); }
+        .legend-dot.sell { background: var(--red); }
+
+        /* Trustless Wallet Styles */
+        .wallet-type-toggle {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .wallet-type-btn {
+            flex: 1;
+            padding: 24px 20px;
+            background: var(--bg-surface);
+            border: 2px solid var(--border-subtle);
+            border-radius: 16px;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .wallet-type-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold) 0%, var(--gold-dark) 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .wallet-type-btn:hover {
+            background: var(--bg-elevated);
+            border-color: var(--border-medium);
+        }
+        
+        .wallet-type-btn.active {
+            border-color: var(--gold);
+            background: rgba(201, 162, 39, 0.08);
+            color: var(--text-white);
+        }
+        
+        .wallet-type-btn.active::before {
+            transform: scaleX(1);
+        }
+        
+        .wallet-type-btn.trustless.active {
+            border-color: var(--emerald);
+            background: rgba(16, 185, 129, 0.08);
+        }
+        
+        .wallet-type-btn.trustless.active::before {
+            background: linear-gradient(90deg, var(--emerald) 0%, #059669 100%);
+        }
+        
+        .wallet-type-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+        }
+        
+        .wallet-type-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+        }
+        
+        .wallet-type-btn.active .wallet-type-icon {
+            background: rgba(201, 162, 39, 0.15);
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+        
+        .wallet-type-btn.trustless.active .wallet-type-icon {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: var(--emerald);
+            color: var(--emerald);
+        }
+        
+        .wallet-type-name {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-white);
+        }
+        
+        .wallet-type-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+        
+        .lock-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .lock-option {
+            padding: 16px 12px;
+            background: var(--bg-surface);
+            border: 2px solid var(--border-subtle);
+            border-radius: 12px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .lock-option:hover {
+            border-color: var(--border-medium);
+            background: var(--bg-elevated);
+        }
+        
+        .lock-option.active {
+            border-color: var(--emerald);
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .lock-days {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-white);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        
+        .lock-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+        
+        .trust-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 8px;
+        }
+        
+        .trust-badge.trusted { background: rgba(201, 162, 39, 0.2); color: var(--gold); }
+        .trust-badge.semi-trustless { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+        .trust-badge.trustless { background: rgba(16, 185, 129, 0.2); color: var(--emerald); }
+        .trust-badge.very-trustless { background: rgba(16, 185, 129, 0.3); color: #34d399; }
+        .trust-badge.maximum { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .trust-badge.ultra { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+        
+        .contract-wallet-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .contract-wallet-card:hover {
+            border-color: var(--border-medium);
+            background: var(--bg-elevated);
+        }
+        
+        .contract-wallet-card.selected {
+            border-color: var(--emerald);
+            background: rgba(16, 185, 129, 0.08);
+        }
+        
+        .contract-wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        
+        .contract-wallet-address {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            color: var(--text-white);
+            font-weight: 500;
+        }
+        
+        .contract-wallet-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        
+        .contract-wallet-stat {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg-deep);
+            border-radius: 8px;
+        }
+        
+        .contract-wallet-stat-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-white);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        
+        .contract-wallet-stat-label {
+            font-size: 9px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+        
+        .lock-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .lock-indicator.locked {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--emerald);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .lock-indicator.unlocked {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .trustless-info {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        
+        .trustless-info h4 {
+            color: var(--emerald);
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .trustless-info ul {
+            margin-left: 20px;
+            color: var(--text-gray);
+            line-height: 1.8;
+        }
+        
+        .trustless-info li {
+            margin-bottom: 6px;
+        }
+        
+        .trustless-info li strong {
+            color: var(--text-white);
+        }
+
+        .program-id {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 14px;
+            word-break: break-all;
+        }
+        
+        /* Section dividers */
+        .section-divider {
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 20px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Atmospheric Background -->
+    <div class="atmosphere">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    <div class="grid-pattern"></div>
+
+    <header>
+        <div class="logo">
+            <span class="mm">MM</span><span class="whistle">.WHISTLE</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div id="connStatus"><span class="status-dot off"></span>Offline</div>
+            <button id="btnConnectWallet" class="btn btn-connect" onclick="showWalletSelector()">
+                Connect Wallet
+            </button>
+            <div id="connectedWallet" class="connected-wallet hidden">
+                <img id="walletIcon" class="wallet-icon" src="" alt="Wallet">
+                <span class="wallet-addr" id="phantomAddr">-</span>
+                <button class="btn-disconnect" onclick="disconnectWallet()">×</button>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Wallet Selector Modal -->
+    <div id="walletSelectorModal" class="wallet-selector-modal hidden">
+        <div class="wallet-selector">
+            <h3>Connect Wallet</h3>
+            <div id="walletSelectorContent">
+                <!-- Dynamically populated -->
+            </div>
+            <button class="wallet-selector-close" onclick="hideWalletSelector()">Cancel</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Step Navigation -->
+        <div class="steps-nav">
+            <button class="step-btn active" onclick="showStep(1)">
+                <div class="step-num">STEP 1</div>
+                <div class="step-name">Create Wallet</div>
+            </button>
+            <button class="step-btn" onclick="showStep(2)">
+                <div class="step-num">STEP 2</div>
+                <div class="step-name">Fund Wallet</div>
+            </button>
+            <button class="step-btn" onclick="showStep(3)">
+                <div class="step-num">STEP 3</div>
+                <div class="step-name">Create Token</div>
+            </button>
+            <button class="step-btn" onclick="showStep(4)">
+                <div class="step-num">STEP 4</div>
+                <div class="step-name">Run MM</div>
+            </button>
+        </div>
+
+        <!-- Step 1: Create Wallet -->
+        <div id="step1" class="step-content">
+            <div class="panel">
+                <div class="panel-head">Trustless Wallet</div>
+                <div class="panel-body">
+                    <!-- Trustless Wallet Section -->
+                    <div id="trustlessWalletSection">
+                        <div class="trustless-info">
+                            <h4>Trustless Market Making</h4>
+                            <ul>
+                                <li><strong>No private keys</strong> - Wallet controlled by smart contract (PDA)</li>
+                                <li><strong>Lock period</strong> - Choose how long funds are locked</li>
+                                <li><strong>Only you</strong> - Only your connected wallet can withdraw (after lock)</li>
+                                <li><strong>Audited</strong> - Open source, verifiable on-chain</li>
+                            </ul>
+                            <div class="program-id">
+                                Program: <span id="contractProgramId">Loading...</span>
+                            </div>
+                        </div>
+                        
+                        <label>Your Trustless Wallets</label>
+                        <div id="contractWalletsList" style="margin-bottom: 16px;">
+                            <div style="color: #707070; font-size: 12px;">Loading...</div>
+                        </div>
+                        <button class="btn btn-secondary btn-block" onclick="loadContractWallets()" style="margin-bottom: 24px;">Refresh</button>
+                        
+                        <div style="border-top: 1px solid #3d3d3d; padding-top: 16px; margin-top: 8px;">
+                            <label>Create Trustless Wallet</label>
+                            
+                            <label style="margin-top: 12px;">Lock Period (Trustless Level)</label>
+                            <div class="lock-options" id="lockOptions">
+                                <div class="lock-option" onclick="selectLockPeriod(0)" data-days="0">
+                                    <div class="lock-days">0</div>
+                                    <div class="lock-label">No Lock</div>
+                                    <div class="trust-badge trusted">Trusted</div>
+                                </div>
+                                <div class="lock-option" onclick="selectLockPeriod(7)" data-days="7">
+                                    <div class="lock-days">7</div>
+                                    <div class="lock-label">Days</div>
+                                    <div class="trust-badge semi-trustless">Semi</div>
+                                </div>
+                                <div class="lock-option active" onclick="selectLockPeriod(30)" data-days="30">
+                                    <div class="lock-days">30</div>
+                                    <div class="lock-label">Days</div>
+                                    <div class="trust-badge trustless">Trustless</div>
+                                </div>
+                                <div class="lock-option" onclick="selectLockPeriod(90)" data-days="90">
+                                    <div class="lock-days">90</div>
+                                    <div class="lock-label">Days</div>
+                                    <div class="trust-badge very-trustless">Very</div>
+                                </div>
+                                <div class="lock-option" onclick="selectLockPeriod(180)" data-days="180">
+                                    <div class="lock-days">180</div>
+                                    <div class="lock-label">Days</div>
+                                    <div class="trust-badge maximum">Max</div>
+                                </div>
+                                <div class="lock-option" onclick="selectLockPeriod(365)" data-days="365">
+                                    <div class="lock-days">365</div>
+                                    <div class="lock-label">Days</div>
+                                    <div class="trust-badge ultra">Ultra</div>
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-success btn-block" id="btnCreateContractWallet" onclick="createContractWallet()">
+                                Create Trustless Wallet (Sign Transaction)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Fund Wallet -->
+        <div id="step2" class="step-content hidden">
+            <div class="panel">
+                <div class="panel-head">Fund Wallet</div>
+                <div class="panel-body">
+                    <!-- Regular wallet funding -->
+                    <div id="regularFundSection">
+                        <div class="info">
+                            Send SOL to this address. Minimum 0.1 SOL recommended for trading.
+                        </div>
+                        <div class="warning" id="lowBalanceWarning">
+                            Your wallet needs SOL to create tokens and trade. Send at least 0.1 SOL to continue.
+                        </div>
+                        <label>Your Wallet Address</label>
+                        <div class="copy-row">
+                            <input type="text" id="walletAddr" readonly>
+                            <button class="btn btn-secondary" onclick="copyAddr()">Copy</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Trustless wallet funding -->
+                    <div id="trustlessFundSection" class="hidden">
+                        <div class="trustless-info">
+                            <h4>Trustless Deposit</h4>
+                            <p style="color: var(--text-gray); margin-bottom: 8px; line-height: 1.6;">
+                                Sign a transaction to deposit SOL directly to your smart contract wallet.
+                                Funds are protected by the on-chain program.
+                            </p>
+                        </div>
+                        
+                        <!-- Wallet Selector -->
+                        <label>Select Trustless Wallet</label>
+                        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                            <select id="trustlessWalletSelect" onchange="onTrustlessWalletSelect()" style="flex: 1;">
+                                <option value="">-- Select a wallet --</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="loadContractWallets(); refreshTrustlessSelect();" style="flex: none;">
+                                Refresh
+                            </button>
+                        </div>
+                        
+                        <div id="trustlessWalletInfo" style="background: #2d2d2d; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+                            <div style="font-size: 10px; color: #707070; margin-bottom: 4px;">PDA ADDRESS</div>
+                            <div id="trustlessAddr" style="font-family: monospace; font-size: 12px; word-break: break-all;">-</div>
+                            <div id="lockStatus" class="lock-indicator locked" style="margin-top: 8px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                <span id="lockTimeRemaining">-</span>
+                            </div>
+                            <!-- Auto-trading status -->
+                            <div id="operatorStatus" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #3d3d3d;">
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <div style="font-size: 10px; color: #707070;">AUTO-TRADING</div>
+                                        <div id="operatorStatusText" style="color: #f97316; font-size: 12px;">Not Enabled</div>
+                                    </div>
+                                    <button class="btn btn-sm btn-primary" id="btnEnableAutoTrading" onclick="enableAutoTrading()" style="padding: 6px 12px; font-size: 11px;">
+                                        Enable 24/7 Trading
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <label>Deposit Amount (SOL)</label>
+                        <div class="row">
+                            <input type="number" id="depositAmount" value="0.5" min="0.01" step="0.01">
+                            <button class="btn btn-success" onclick="depositToContract()" style="flex: none; width: 120px;">
+                                Deposit (Sign)
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="stats" style="margin-top: 16px;">
+                        <div class="stat">
+                            <div class="stat-label">Balance</div>
+                            <div class="stat-value" id="walletBal">0 SOL</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Status</div>
+                            <div class="stat-value" id="fundStatus">Waiting</div>
+                        </div>
+                        <div class="stat" id="lockStatContainer" style="display: none;">
+                            <div class="stat-label">Lock</div>
+                            <div class="stat-value" id="lockStat">-</div>
+                        </div>
+                        <div class="stat" id="withdrawStatContainer" style="display: none;">
+                            <div class="stat-label">Withdraw</div>
+                            <div class="stat-value">
+                                <button class="btn btn-sm btn-secondary" id="btnWithdraw" onclick="withdrawFromContract()" disabled>
+                                    Withdraw
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="btns">
+                        <button class="btn btn-secondary" onclick="showStep(1)">Back</button>
+                        <button class="btn btn-secondary" id="btnRefresh" onclick="refreshBal()">Refresh</button>
+                        <button class="btn btn-primary" id="btnStep3" disabled onclick="goToStep3()">Continue</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Create Token -->
+        <div id="step3" class="step-content hidden">
+            <div class="panel">
+                <div class="panel-head" id="step3Title">Create Token via PumpPortal</div>
+                <div class="panel-body">
+                    <!-- Wallet Selector for Token Creation -->
+                    <label>Using Wallet</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                        <select id="step3WalletSelect" onchange="onStep3WalletSelect()" style="flex: 1;">
+                            <option value="">-- Select a wallet --</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="refreshStep3Wallets()" style="flex: none;">
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <!-- Regular wallet info -->
+                    <div class="info" id="step3InfoRegular">
+                        Create your token on Pump.fun via PumpPortal. You earn 1% creator fees on all trades.
+                    </div>
+                    
+                    <!-- Trustless wallet info - shows when using contract wallet -->
+                    <div class="trustless-token-info hidden" id="step3InfoTrustless" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--emerald); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                        <h4 style="color: var(--emerald); margin: 0 0 8px 0; font-weight: 600;">Trustless Token Creation</h4>
+                        <ul style="margin: 0; padding-left: 20px; color: #a0a0a0; font-size: 13px;">
+                            <li><strong style="color: #5cb85c;">Vault PDA becomes creator</strong> - Not your personal wallet</li>
+                            <li><strong style="color: #5cb85c;">0.5% creator fees → Vault</strong> - Automatically!</li>
+                            <li><strong style="color: #5cb85c;">Self-sustaining MM</strong> - Fees fund trading forever</li>
+                        </ul>
+                        <div style="margin-top: 8px; font-size: 12px; color: #707070;">
+                            Vault: <span id="trustlessCreatorPda">...</span>
+                        </div>
+                    </div>
+                    
+                    <div id="step3BalCheck"></div>
+                    
+                    <!-- Token Image Upload -->
+                    <label>Token Image *</label>
+                    <div class="image-upload-area" id="imageUploadArea" onclick="document.getElementById('tokenImage').click()">
+                        <input type="file" id="tokenImage" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="previewImage(this)">
+                        <div id="imagePreview">
+                            <div class="upload-placeholder">
+                                <div style="font-size: 32px; margin-bottom: 8px;">+</div>
+                                <div>Click to upload image</div>
+                                <div style="font-size: 11px; color: #707070; margin-top: 4px;">PNG, JPG, GIF, WEBP (max 5MB)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div>
+                            <label>Token Name *</label>
+                            <input type="text" id="tokenName" placeholder="My Awesome Token">
+                        </div>
+                        <div>
+                            <label>Symbol *</label>
+                            <input type="text" id="tokenSymbol" placeholder="MAT" maxlength="10">
+                        </div>
+                    </div>
+                    <label>Description</label>
+                    <input type="text" id="tokenDesc" placeholder="The best meme token ever...">
+                    <div class="row">
+                        <div>
+                            <label>Twitter (optional)</label>
+                            <input type="text" id="tokenTwitter" placeholder="https://twitter.com/...">
+                        </div>
+                        <div>
+                            <label>Telegram (optional)</label>
+                            <input type="text" id="tokenTelegram" placeholder="https://t.me/...">
+                        </div>
+                    </div>
+                    <label>Initial Buy (SOL) - Optional</label>
+                    <input type="number" id="initBuy" value="0" step="0.01" min="0">
+                    <button class="btn btn-primary btn-block" id="btnCreateToken" onclick="createToken()">Create Token on Pump.fun</button>
+                    
+                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #3d3d3d;">
+                        <label>Or Use Existing Token Mint</label>
+                        <div class="copy-row">
+                            <input type="text" id="existingMint" placeholder="Token mint address...">
+                            <button class="btn btn-secondary" onclick="useExisting()">Use</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Market Maker -->
+        <div id="step4" class="step-content hidden">
+            <!-- Wallet & Token Selector Panel -->
+            <div class="panel">
+                <div class="panel-head">Active Wallet & Token</div>
+                <div class="panel-body">
+                    <div class="row">
+                        <div style="flex: 1;">
+                            <label>Wallet</label>
+                            <div style="display: flex; gap: 8px;">
+                                <select id="step4WalletSelect" onchange="onStep4WalletSelect()" style="flex: 1;">
+                                    <option value="">-- Select --</option>
+                                </select>
+                                <button class="btn btn-sm btn-secondary" onclick="refreshStep4Wallets()">↻</button>
+                            </div>
+                            <div id="step4WalletInfo" style="margin-top: 8px; font-size: 12px; color: #707070;">
+                                Balance: <span id="step4WalletBal">-</span> | Lock: <span id="step4WalletLock">-</span>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Token</label>
+                            <input type="text" id="step4TokenMint" placeholder="Token mint..." onchange="onStep4TokenChange()">
+                            <div style="margin-top: 8px; font-size: 12px; color: #707070;">
+                                <span id="step4TokenName">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Info Panel -->
+            <div class="panel">
+                <div class="panel-head">Token Intelligence <span id="tokenDataSource" style="font-size: 10px; color: #707070; margin-left: 8px;">via tokens.whistle.ninja</span></div>
+                <div class="panel-body">
+                    <div class="token-info-grid">
+                        <div class="token-info-main">
+                            <div class="token-mint" id="tokenMintFull">-</div>
+                            <div class="token-meta">
+                                <span id="tokenPoolType" class="pool-badge">-</span>
+                                <span id="tokenGraduated" class="grad-badge">-</span>
+                            </div>
+                        </div>
+                        <div class="token-stats-grid">
+                            <div class="token-stat">
+                                <div class="token-stat-label">PRICE</div>
+                                <div class="token-stat-value" id="tokenPrice">-</div>
+                                <div class="token-stat-sub" id="tokenPriceSOL" style="color: #888;">-</div>
+                            </div>
+                            <div class="token-stat">
+                                <div class="token-stat-label">MARKET CAP</div>
+                                <div class="token-stat-value" id="tokenMcap">-</div>
+                            </div>
+                            <div class="token-stat">
+                                <div class="token-stat-label">LIQUIDITY</div>
+                                <div class="token-stat-value" id="tokenLiq">-</div>
+                                <div class="token-stat-sub" id="tokenLiqSOL" style="color: #888;">-</div>
+                            </div>
+                            <div class="token-stat">
+                                <div class="token-stat-label">SOL PRICE</div>
+                                <div class="token-stat-value" id="solPrice">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="token-update-row">
+                        <span id="tokenLastUpdate" style="font-size: 10px; color: #707070;">Last update: -</span>
+                        <button class="btn btn-sm" onclick="refreshTokenData()">Refresh</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Cap Chart Panel -->
+            <div class="panel">
+                <div class="panel-head">Market Cap Chart <span id="chartDataPoints" style="font-size: 10px; color: #707070; margin-left: 8px;">0 points</span></div>
+                <div class="panel-body">
+                    <div class="chart-controls">
+                        <button class="chart-range-btn" onclick="setChartRange('5m')">5m</button>
+                        <button class="chart-range-btn" onclick="setChartRange('15m')">15m</button>
+                        <button class="chart-range-btn active" onclick="setChartRange('1h')">1h</button>
+                        <button class="chart-range-btn" onclick="setChartRange('4h')">4h</button>
+                        <button class="chart-range-btn" onclick="setChartRange('24h')">24h</button>
+                        <button class="chart-range-btn" onclick="setChartRange('all')">All</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="mcapChart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-item"><span class="legend-dot mcap"></span> Market Cap</div>
+                        <div class="legend-item"><span class="legend-dot buy"></span> Buy</div>
+                        <div class="legend-item"><span class="legend-dot sell"></span> Sell</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">Select Strategy</div>
+                <div class="panel-body">
+                    <div id="strategiesContainer" class="strategies-grid">
+                        <!-- Strategies loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">Market Maker Control <span id="tokenDataSource2" style="font-size: 10px; color: #5cb85c; margin-left: 8px;">Polling (500ms)</span></div>
+                <div class="panel-body">
+                    <div id="step4BalCheck"></div>
+                    
+                    <!-- Token Info Row -->
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-label">Token</div>
+                            <div class="stat-value" id="mmToken" style="font-size: 12px;">-</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">DEX</div>
+                            <div class="stat-value" id="mmDex" style="color: #e07a3a;">-</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Price</div>
+                            <div class="stat-value" id="mmPrice">-</div>
+                            <div style="font-size: 10px; color: #707070;" id="mmPriceUSD">-</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Status</div>
+                            <div class="stat-value" id="mmStat">Stopped</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Market Data Row -->
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-label">Market Cap</div>
+                            <div class="stat-value green" id="mmMcap">-</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Liquidity</div>
+                            <div class="stat-value" id="mmLiq">-</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Balance</div>
+                            <div class="stat-value" id="mmBal">0 SOL</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Transactions</div>
+                            <div class="stat-value green" id="mmTxCount">0</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Volume</div>
+                            <div class="stat-value green" id="mmVolume">0 SOL</div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Strategy Display -->
+                    <div id="selectedStrategyDisplay" style="background: #1a1a1a; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                        <div style="font-size: 10px; color: #707070; margin-bottom: 4px;">SELECTED STRATEGY</div>
+                        <div id="selectedStrategyName" style="font-size: 14px; color: #e07a3a;">None - Select above</div>
+                        <div id="selectedStrategyDesc" style="font-size: 11px; color: #a0a0a0; margin-top: 4px;"></div>
+                    </div>
+
+                    <!-- Always Running Status for Trustless Wallets -->
+                    <div id="alwaysRunningStatus" style="display: none; background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.05)); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <div style="width: 10px; height: 10px; background: #4CAF50; border-radius: 50%; animation: pulse 2s infinite;"></div>
+                            <span style="color: #4CAF50; font-weight: 600; font-size: 13px;">ALWAYS RUNNING</span>
+                        </div>
+                        <div style="font-size: 11px; color: #a0a0a0;">
+                            MM bots run continuously on the server. They never stop, and automatically resume when funds are deposited.
+                        </div>
+                    </div>
+                    
+                    <div class="btns">
+                        <button class="btn btn-success" id="btnStart" onclick="startMM()">Start</button>
+                        <button class="btn btn-secondary" onclick="claimFees()">Claim Fees</button>
+                        <button class="btn btn-secondary" onclick="updateStrategy()">Update Strategy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">Activity Log</div>
+                <div class="panel-body" style="padding: 0;">
+                    <div class="log" id="logBox">
+                        <div class="log-item"><span class="log-time">--:--</span><span class="log-msg">Ready</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="modal-overlay hidden" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-title" id="modalTitle">Error</div>
+            <div class="modal-body" id="modalBody">Something went wrong.</div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Required Overlay - shown when not connected -->
+    <div class="auth-required" id="authOverlay">
+        <h2>Connect Your Wallet</h2>
+        <p>Connect your Solana wallet to access your MM wallets, strategies, and bots. Your data is private and tied to your wallet.</p>
+        <button class="btn btn-connect" onclick="showWalletSelector()">
+            Select Wallet
+        </button>
+        <p style="margin-top: 16px; font-size: 12px; color: #707070;">
+            Supports: Phantom, Solflare, Backpack, Coinbase, Trust Wallet
+        </p>
+    </div>
+
+    <script>
+        // State - persisted to localStorage
+        const S = {
+            step: 1,
+            ownerWallet: null, // Connected Phantom wallet (for authentication)
+            walletId: null,    // Selected MM wallet ID
+            walletAddr: null,  // Selected MM wallet address
+            walletBalance: 0,
+            tokenMint: null,
+            mmId: null,
+            running: false,
+            strategy: null,
+            totalTrades: 0,
+            // Trustless wallet state
+            walletType: 'trustless', // Always trustless now
+            contractWallet: null,  // Selected contract wallet PDA address
+            lockDays: 30,          // Selected lock period
+            contractInfo: null     // Contract wallet info from chain
+        };
+        
+        // Contract program info
+        let contractProgramId = null;
+        let contractLockOptions = [];
+        
+        // Available strategies (loaded from server)
+        let availableStrategies = [];
+
+        // =====================================================================
+        // WALLET CONNECTION (Phantom)
+        // =====================================================================
+        
+        // Supported wallets configuration - using official wallet logos
+        const SUPPORTED_WALLETS = [
+            { 
+                id: 'phantom', 
+                name: 'Phantom', 
+                icon: 'https://phantom.app/favicon.ico',
+                getProvider: () => window.solana?.isPhantom ? window.solana : null,
+                url: 'https://phantom.app/'
+            },
+            { 
+                id: 'solflare', 
+                name: 'Solflare', 
+                icon: 'https://solflare.com/favicon.ico',
+                getProvider: () => window.solflare?.isSolflare ? window.solflare : null,
+                url: 'https://solflare.com/'
+            },
+            { 
+                id: 'backpack', 
+                name: 'Backpack', 
+                icon: 'https://backpack.app/favicon.ico',
+                getProvider: () => window.backpack?.isBackpack ? window.backpack : null,
+                url: 'https://backpack.app/'
+            },
+            { 
+                id: 'coinbase', 
+                name: 'Coinbase Wallet', 
+                icon: 'https://www.coinbase.com/favicon.ico',
+                getProvider: () => window.coinbaseSolana || null,
+                url: 'https://www.coinbase.com/wallet'
+            },
+            { 
+                id: 'trust', 
+                name: 'Trust Wallet', 
+                icon: 'https://trustwallet.com/assets/images/favicon.png',
+                getProvider: () => window.trustwallet?.isTrust ? window.trustwallet : null,
+                url: 'https://trustwallet.com/'
+            }
+        ];
+        
+        // Current connected wallet provider
+        let connectedProvider = null;
+        let connectedWalletId = null;
+        
+        // Detect available wallets
+        function getAvailableWallets() {
+            return SUPPORTED_WALLETS.filter(w => w.getProvider() !== null);
+        }
+        
+        // Show wallet selector modal
+        function showWalletSelector() {
+            const available = getAvailableWallets();
+            
+            let html = '<div class="wallet-list">';
+            
+            if (available.length === 0) {
+                html += `<p style="text-align: center; color: #a0a0a0; padding: 16px;">
+                    No Solana wallets detected.<br><br>
+                    Install one of these wallets:
+                </p>`;
+                SUPPORTED_WALLETS.forEach(w => {
+                    html += `<a href="${w.url}" target="_blank" class="wallet-option wallet-install">
+                        <img src="${w.icon}" alt="${w.name}" class="wallet-icon">
+                        <span class="wallet-name">${w.name}</span>
+                        <span class="wallet-status">Install →</span>
+                    </a>`;
+                });
+            } else {
+                html += '<p style="text-align: center; color: #a0a0a0; margin-bottom: 12px;">Select a wallet:</p>';
+                available.forEach(w => {
+                    html += `<div class="wallet-option" onclick="connectWallet('${w.id}')">
+                        <img src="${w.icon}" alt="${w.name}" class="wallet-icon">
+                        <span class="wallet-name">${w.name}</span>
+                        <span class="wallet-status detected">Detected</span>
+                    </div>`;
+                });
+            }
+            
+            html += '</div>';
+            
+            document.getElementById('walletSelectorContent').innerHTML = html;
+            document.getElementById('walletSelectorModal').classList.remove('hidden');
+        }
+        
+        function hideWalletSelector() {
+            document.getElementById('walletSelectorModal').classList.add('hidden');
+        }
+        
+        // Connect to a specific wallet
+        async function connectWallet(walletId) {
+            const walletConfig = SUPPORTED_WALLETS.find(w => w.id === walletId);
+            if (!walletConfig) {
+                showError('Wallet not found');
+                return;
+            }
+            
+            const provider = walletConfig.getProvider();
+            if (!provider) {
+                showError(`${walletConfig.name} not detected. Please install it.`);
+                window.open(walletConfig.url, '_blank');
+                return;
+            }
+            
+            try {
+                hideWalletSelector();
+                
+                // Request connection
+                const resp = await provider.connect();
+                const pubkey = resp.publicKey.toString();
+                
+                // Store connection info
+                S.ownerWallet = pubkey;
+                connectedProvider = provider;
+                connectedWalletId = walletId;
+                saveState();
+                localStorage.setItem('lastWalletId', walletId);
+                
+                // Update UI
+                document.getElementById('authOverlay').classList.add('hidden');
+                document.getElementById('btnConnectWallet').classList.add('hidden');
+                document.getElementById('connectedWallet').classList.remove('hidden');
+                document.getElementById('phantomAddr').textContent = pubkey.slice(0, 4) + '...' + pubkey.slice(-4);
+                document.getElementById('walletIcon').src = walletConfig.icon;
+                document.getElementById('walletIcon').alt = walletConfig.name;
+                
+                console.log(`[Wallet] Connected via ${walletConfig.name}:`, pubkey);
+                addLog(`${walletConfig.name} connected: ${pubkey.slice(0, 8)}...`, 'info');
+                
+                // Reload wallets for this owner
+                await loadWallets();
+                
+            } catch (e) {
+                console.error('[Wallet] Connection error:', e);
+                showError('Failed to connect wallet: ' + e.message);
+            }
+        }
+        
+        // Legacy function for auth overlay button
+        function connectPhantom() {
+            showWalletSelector();
+        }
+        
+        function disconnectWallet() {
+            try {
+                if (connectedProvider?.disconnect) {
+                    connectedProvider.disconnect();
+                }
+            } catch (e) {}
+            
+            S.ownerWallet = null;
+            S.walletId = null;
+            S.walletAddr = null;
+            S.tokenMint = null;
+            connectedProvider = null;
+            connectedWalletId = null;
+            saveState();
+            localStorage.removeItem('lastWalletId');
+            
+            // Update UI
+            document.getElementById('authOverlay').classList.remove('hidden');
+            document.getElementById('btnConnectWallet').classList.remove('hidden');
+            document.getElementById('connectedWallet').classList.add('hidden');
+            
+            addLog('Wallet disconnected', 'info');
+        }
+        
+        // Check if already connected on page load
+        async function checkWalletConnection() {
+            // Try to reconnect to last used wallet
+            const lastWalletId = localStorage.getItem('lastWalletId');
+            if (lastWalletId) {
+                const walletConfig = SUPPORTED_WALLETS.find(w => w.id === lastWalletId);
+                if (walletConfig) {
+                    const provider = walletConfig.getProvider();
+                    if (provider?.isConnected && provider.publicKey) {
+                        const pubkey = provider.publicKey.toString();
+                        S.ownerWallet = pubkey;
+                        connectedProvider = provider;
+                        connectedWalletId = lastWalletId;
+                        
+                        document.getElementById('authOverlay').classList.add('hidden');
+                        document.getElementById('btnConnectWallet').classList.add('hidden');
+                        document.getElementById('connectedWallet').classList.remove('hidden');
+                        document.getElementById('phantomAddr').textContent = pubkey.slice(0, 4) + '...' + pubkey.slice(-4);
+                        document.getElementById('walletIcon').src = walletConfig.icon;
+                        
+                        console.log(`[Wallet] Auto-reconnected via ${walletConfig.name}:`, pubkey);
+                        return true;
+                    }
+                }
+            }
+            
+            // Check all providers for active connection
+            for (const walletConfig of SUPPORTED_WALLETS) {
+                try {
+                    const provider = walletConfig.getProvider();
+                    if (provider?.isConnected && provider.publicKey) {
+                        const pubkey = provider.publicKey.toString();
+                        S.ownerWallet = pubkey;
+                        connectedProvider = provider;
+                        connectedWalletId = walletConfig.id;
+                        
+                        document.getElementById('authOverlay').classList.add('hidden');
+                        document.getElementById('btnConnectWallet').classList.add('hidden');
+                        document.getElementById('connectedWallet').classList.remove('hidden');
+                        document.getElementById('phantomAddr').textContent = pubkey.slice(0, 4) + '...' + pubkey.slice(-4);
+                        document.getElementById('walletIcon').src = walletConfig.icon;
+                        
+                        console.log(`[Wallet] Found active ${walletConfig.name} connection:`, pubkey);
+                        return true;
+                    }
+                } catch (e) {}
+            }
+            
+            return false;
+        }
+
+        // Load saved state from localStorage
+        function loadState() {
+            try {
+                const saved = localStorage.getItem('pumpMM_state');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    if (data.ownerWallet) S.ownerWallet = data.ownerWallet;
+                    if (data.walletId) S.walletId = data.walletId;
+                    if (data.walletAddr) S.walletAddr = data.walletAddr;
+                    if (data.tokenMint) S.tokenMint = data.tokenMint;
+                    if (data.strategy) S.strategy = data.strategy;
+                    // Trustless wallet state
+                    if (data.walletType) S.walletType = data.walletType;
+                    if (data.contractWallet) S.contractWallet = data.contractWallet;
+                    if (data.lockDays !== undefined) S.lockDays = data.lockDays;
+                    console.log('[State] Loaded:', S);
+                }
+            } catch (e) {
+                console.error('[State] Load error:', e);
+            }
+        }
+
+        // Save state to localStorage
+        function saveState() {
+            try {
+                localStorage.setItem('pumpMM_state', JSON.stringify({
+                    ownerWallet: S.ownerWallet,
+                    walletId: S.walletId,
+                    walletAddr: S.walletAddr,
+                    tokenMint: S.tokenMint,
+                    strategy: S.strategy,
+                    // Trustless wallet state
+                    walletType: S.walletType,
+                    contractWallet: S.contractWallet,
+                    lockDays: S.lockDays
+                }));
+            } catch (e) {
+                console.error('[State] Save error:', e);
+            }
+        }
+
+        // Clear saved state
+        function clearState() {
+            localStorage.removeItem('pumpMM_state');
+            S.walletId = null;
+            S.walletAddr = null;
+            S.walletBalance = 0;
+            S.tokenMint = null;
+            S.mmId = null;
+            S.running = false;
+        }
+
+        // =====================================================================
+        // MODAL / ERROR HANDLING
+        // =====================================================================
+        
+        function showModal(title, message, type = 'error') {
+            const titleEl = document.getElementById('modalTitle');
+            titleEl.textContent = title;
+            titleEl.className = 'modal-title ' + type;
+            document.getElementById('modalBody').textContent = message;
+            document.getElementById('modalOverlay').classList.remove('hidden');
+        }
+
+        function hideModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+        }
+
+        function closeModal(e) {
+            if (e.target.id === 'modalOverlay') hideModal();
+        }
+
+        function showError(msg) {
+            showModal('Error', msg, 'error');
+            console.error('[Error]', msg);
+        }
+
+        function showSuccess(msg) {
+            showModal('Success', msg, 'success');
+        }
+
+        function showWarning(msg) {
+            showModal('Warning', msg, 'warning');
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.classList.add('loading');
+                btn.disabled = true;
+            } else {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        }
+
+        // =====================================================================
+        // VALIDATION
+        // =====================================================================
+
+        function validateWalletExists() {
+            // Check for either regular wallet OR trustless wallet
+            if (!S.walletId && !S.contractWallet) {
+                showError('Please create or select a wallet first (Step 1)');
+                showStep(1);
+                return false;
+            }
+            return true;
+        }
+
+        function validateHasFunds(minRequired = 0.01) {
+            if (S.walletBalance < minRequired) {
+                showError(`Insufficient balance. You have ${S.walletBalance.toFixed(4)} SOL but need at least ${minRequired} SOL.`);
+                return false;
+            }
+            return true;
+        }
+
+        function validateTokenExists() {
+            if (!S.tokenMint) {
+                showError('Please create or select a token first (Step 3)');
+                showStep(3);
+                return false;
+            }
+            return true;
+        }
+
+        // =====================================================================
+        // TRUSTLESS WALLET (Smart Contract)
+        // =====================================================================
+        
+        // Set wallet type (always trustless now)
+        function setWalletType(type) {
+            S.walletType = 'trustless';
+            saveState();
+            
+            // Load trustless wallet info
+            loadContractInfo();
+            loadContractWallets();
+        }
+        
+        // Load contract program info
+        async function loadContractInfo() {
+            try {
+                const res = await fetch('/api/contract/info');
+                const data = await res.json();
+                
+                contractProgramId = data.programId;
+                contractLockOptions = data.lockOptions;
+                
+                document.getElementById('contractProgramId').textContent = contractProgramId || 'Not deployed';
+                
+            } catch (e) {
+                console.error('[Contract] Failed to load info:', e);
+                document.getElementById('contractProgramId').textContent = 'Error loading';
+            }
+        }
+        
+        // Load user's contract wallets
+        async function loadContractWallets() {
+            if (!S.ownerWallet) return;
+            
+            const container = document.getElementById('contractWalletsList');
+            container.innerHTML = '<div style="color: #707070; font-size: 12px;">Loading...</div>';
+            
+            try {
+                const res = await fetch(`/api/contract/wallets?ownerWallet=${S.ownerWallet}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    container.innerHTML = `<div style="color: #d9534f; font-size: 12px;">${data.error}</div>`;
+                    return;
+                }
+                
+                if (!data.wallets || data.wallets.length === 0) {
+                    console.log('[Wallets] No wallets found for this owner');
+                    container.innerHTML = `<div style="color: #707070; font-size: 12px;">No trustless wallets yet. Create one below.</div>`;
+                    
+                    // Clear stale state if we have a selected contract wallet that doesn't exist
+                    if (S.contractWallet) {
+                        console.log('[Wallets] Clearing stale contract wallet state');
+                        S.contractWallet = null;
+                        S.contractInfo = null;
+                        S.walletType = 'regular';
+                        saveState();
+                    }
+                    return;
+                }
+                
+                container.innerHTML = data.wallets.map(w => `
+                    <div class="contract-wallet-card ${S.contractWallet === w.pdaAddress ? 'selected' : ''}" 
+                         onclick="selectContractWallet('${w.pdaAddress}')">
+                        <div class="contract-wallet-header">
+                            <span class="contract-wallet-address">${w.pdaAddress.slice(0, 8)}...${w.pdaAddress.slice(-6)}</span>
+                            <span class="lock-indicator ${w.isLocked ? 'locked' : 'unlocked'}">
+                                ${w.isLocked ? 'LOCKED' : 'OPEN'} ${w.lockRemaining || ''}
+                            </span>
+                        </div>
+                        <div class="contract-wallet-stats">
+                            <div class="contract-wallet-stat">
+                                <div class="contract-wallet-stat-value">${w.balanceSOL?.toFixed(4) || '0'}</div>
+                                <div class="contract-wallet-stat-label">SOL</div>
+                            </div>
+                            <div class="contract-wallet-stat">
+                                <div class="contract-wallet-stat-value">${w.strategyName || '-'}</div>
+                                <div class="contract-wallet-stat-label">Strategy</div>
+                            </div>
+                            <div class="contract-wallet-stat">
+                                <div class="contract-wallet-stat-value">${w.stats?.totalTrades || 0}</div>
+                                <div class="contract-wallet-stat-label">Trades</div>
+                            </div>
+                            <div class="contract-wallet-stat">
+                                <div class="contract-wallet-stat-value">${w.paused ? '⏸' : '▶'}</div>
+                                <div class="contract-wallet-stat-label">Status</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                console.error('[Contract] Load wallets error:', e);
+                container.innerHTML = `<div style="color: #d9534f; font-size: 12px;">Error: ${e.message}</div>`;
+            }
+        }
+        
+        // Select lock period
+        function selectLockPeriod(days) {
+            S.lockDays = days;
+            saveState();
+            
+            document.querySelectorAll('.lock-option').forEach(el => {
+                el.classList.toggle('active', parseInt(el.dataset.days) === days);
+            });
+        }
+        
+        // Select a contract wallet
+        async function selectContractWallet(pdaAddress) {
+            S.contractWallet = pdaAddress;
+            S.walletAddr = pdaAddress;
+            saveState();
+            
+            // Update UI
+            document.querySelectorAll('.contract-wallet-card').forEach(el => {
+                el.classList.toggle('selected', el.querySelector('.contract-wallet-address')?.textContent.includes(pdaAddress.slice(0, 8)));
+            });
+            
+            // Load detailed info
+            try {
+                const res = await fetch(`/api/contract/wallets/${pdaAddress}?ownerWallet=${S.ownerWallet}`);
+                S.contractInfo = await res.json();
+                S.walletBalance = S.contractInfo.balanceSOL || 0;
+                
+                addLog(`Selected trustless wallet: ${pdaAddress.slice(0, 8)}...`, 'info');
+                
+                // Update the Step 2 selector
+                refreshTrustlessSelect();
+                
+                // Move to step 2 (funding)
+                showStep(2);
+            } catch (e) {
+                showError('Failed to load wallet info: ' + e.message);
+            }
+        }
+        
+        // Handle selection from Step 2 wallet dropdown
+        async function onTrustlessWalletSelect() {
+            const select = document.getElementById('trustlessWalletSelect');
+            const pdaAddress = select.value;
+            
+            if (!pdaAddress) return;
+            
+            // Set the wallet
+            S.contractWallet = pdaAddress;
+            S.walletAddr = pdaAddress;
+            S.walletType = 'trustless';
+            saveState();
+            
+            // Load wallet info
+            try {
+                const res = await fetch(`/api/contract/wallets/${pdaAddress}?ownerWallet=${S.ownerWallet}`);
+                S.contractInfo = await res.json();
+                S.walletBalance = S.contractInfo.balanceSOL || 0;
+                
+                // Update the UI
+                updateTrustlessUI();
+                refreshBal();
+                
+                // Check operator status for auto-trading
+                checkOperatorStatus(pdaAddress);
+                
+                // Fetch volume stats for this wallet
+                fetchVolumeStats();
+                
+                addLog(`Selected wallet: ${pdaAddress.slice(0, 8)}...`, 'info');
+            } catch (e) {
+                showError('Failed to load wallet info: ' + e.message);
+            }
+        }
+        
+        // Fetch and display volume stats from persistent bots
+        async function fetchVolumeStats() {
+            try {
+                const res = await fetch('/api/persistent-bots');
+                const data = await res.json();
+                
+                // ALWAYS use AGGREGATE stats (total across ALL bots for this owner)
+                if (data.stats) {
+                    const txCount = data.stats.totalTrades || 0;
+                    const volume = data.stats.totalVolume || 0;
+                    
+                    document.getElementById('mmTxCount').textContent = txCount;
+                    document.getElementById('mmVolume').textContent = volume.toFixed(4) + ' SOL';
+                    
+                    S.totalTrades = txCount;
+                    S.totalVolume = volume;
+                }
+                
+                // Update running status from any active bot
+                if (data.bots) {
+                    const anyRunning = data.bots.some(b => b.isRunning && !b.isPaused);
+                    const anyPaused = data.bots.some(b => b.isPaused);
+                    
+                    if (anyRunning) {
+                        document.getElementById('mmStat').textContent = 'Running';
+                        document.getElementById('mmStat').className = 'stat-value green';
+                    } else if (anyPaused) {
+                        document.getElementById('mmStat').textContent = 'Waiting for Funds';
+                        document.getElementById('mmStat').className = 'stat-value yellow';
+                    }
+                }
+                
+                // ALSO fetch balance directly from dedicated endpoint
+                if (S.contractWallet) {
+                    try {
+                        const balRes = await fetch(`/api/contract/wallets/${S.contractWallet}/balance`);
+                        const balData = await balRes.json();
+                        if (balData.balanceSOL !== undefined) {
+                            const bal = balData.balanceSOL;
+                            S.walletBalance = bal;
+                            document.getElementById('mmBal').textContent = bal.toFixed(4) + ' SOL';
+                            document.getElementById('walletBal').textContent = bal.toFixed(4) + ' SOL';
+                            console.log('[Balance] Direct fetch: ' + bal.toFixed(4) + ' SOL');
+                        }
+                    } catch (balErr) {
+                        console.error('[Balance] Direct fetch error:', balErr);
+                    }
+                }
+            } catch (e) {
+                console.error('[Stats] Fetch error:', e.message);
+            }
+        }
+        
+        // Refresh the Step 2 trustless wallet selector dropdown
+        async function refreshTrustlessSelect() {
+            const select = document.getElementById('trustlessWalletSelect');
+            if (!select || !S.ownerWallet) return;
+            
+            try {
+                const res = await fetch(`/api/contract/wallets?ownerWallet=${S.ownerWallet}`);
+                const data = await res.json();
+                
+                // Build options
+                let html = '<option value="">-- Select a wallet --</option>';
+                
+                if (data.wallets && data.wallets.length > 0) {
+                    data.wallets.forEach(w => {
+                        const selected = S.contractWallet === w.pdaAddress ? 'selected' : '';
+                        const lockText = w.isLocked ? `[LOCKED] ${w.lockRemaining}` : '[OPEN]';
+                        const balText = `${(w.balanceSOL || 0).toFixed(2)} SOL`;
+                        html += `<option value="${w.pdaAddress}" ${selected}>${w.pdaAddress.slice(0,6)}...${w.pdaAddress.slice(-4)} | ${balText} | ${lockText}</option>`;
+                    });
+                }
+                
+                select.innerHTML = html;
+                
+                // Auto-select if we have a contract wallet
+                if (S.contractWallet) {
+                    select.value = S.contractWallet;
+                }
+            } catch (e) {
+                console.error('[Select] Failed to refresh:', e);
+            }
+        }
+        
+        // =====================================================================
+        // Step 3 & Step 4 Wallet Selectors
+        // =====================================================================
+        
+        // Refresh Step 3 wallet selector
+        async function refreshStep3Wallets() {
+            const select = document.getElementById('step3WalletSelect');
+            if (!select || !S.ownerWallet) return;
+            
+            try {
+                // Get trustless wallets only
+                let html = '<option value="">-- Select a trustless wallet --</option>';
+                
+                const contractRes = await fetch(`/api/contract/wallets?ownerWallet=${S.ownerWallet}`);
+                const contractData = await contractRes.json();
+                if (contractData.wallets?.length > 0) {
+                    contractData.wallets.forEach(w => {
+                        const selected = S.contractWallet === w.pdaAddress ? 'selected' : '';
+                        const lockText = w.isLocked ? `[LOCKED] ${w.lockRemaining}` : '[OPEN]';
+                        html += `<option value="trustless:${w.pdaAddress}" ${selected}>${w.pdaAddress?.slice(0,6)}...${w.pdaAddress?.slice(-4)} | ${(w.balanceSOL || 0).toFixed(2)} SOL | ${lockText}</option>`;
+                    });
+                }
+                
+                select.innerHTML = html;
+            } catch (e) {
+                console.error('[Step3] Failed to refresh wallets:', e);
+            }
+        }
+        
+        // Handle Step 3 wallet selection (trustless only)
+        async function onStep3WalletSelect() {
+            const select = document.getElementById('step3WalletSelect');
+            const value = select.value;
+            if (!value) return;
+            
+            const [type, id] = value.split(':');
+            
+            S.walletType = 'trustless';
+            S.contractWallet = id;
+            S.walletId = null;
+            
+            // Load contract wallet info
+            const res = await fetch(`/api/contract/wallets/${id}?ownerWallet=${S.ownerWallet}`);
+            S.contractInfo = await res.json();
+            S.walletBalance = S.contractInfo.balanceSOL || 0;
+            
+            saveState();
+            updateStep3UI();
+            updateBalanceChecks();
+        }
+        
+        // Update Step 3 UI based on wallet type
+        function updateStep3UI() {
+            const isTrustless = S.walletType === 'trustless' && S.contractWallet;
+            
+            document.getElementById('step3Title').textContent = isTrustless 
+                ? 'Create Token (Trustless)' 
+                : 'Create Token via PumpPortal';
+            
+            document.getElementById('step3InfoRegular').classList.toggle('hidden', isTrustless);
+            document.getElementById('step3InfoTrustless').classList.toggle('hidden', !isTrustless);
+            
+            if (isTrustless && S.contractInfo?.pdaWalletAddress) {
+                document.getElementById('trustlessCreatorPda').textContent = 
+                    S.contractInfo.pdaWalletAddress.slice(0,8) + '...' + S.contractInfo.pdaWalletAddress.slice(-6);
+            }
+        }
+        
+        // Refresh Step 4 wallet selector (trustless only)
+        async function refreshStep4Wallets() {
+            const select = document.getElementById('step4WalletSelect');
+            if (!select || !S.ownerWallet) return;
+            
+            try {
+                let html = '<option value="">-- Select --</option>';
+                
+                // Trustless wallets only
+                const contractRes = await fetch(`/api/contract/wallets?ownerWallet=${S.ownerWallet}`);
+                const contractData = await contractRes.json();
+                if (contractData.wallets?.length > 0) {
+                    contractData.wallets.forEach(w => {
+                        const selected = S.contractWallet === w.pdaAddress ? 'selected' : '';
+                        const lockText = w.isLocked ? '[LOCKED]' : '[OPEN]';
+                        html += `<option value="trustless:${w.pdaAddress}" ${selected}>${w.pdaAddress?.slice(0,6)}... | ${(w.balanceSOL || 0).toFixed(2)} SOL ${lockText}</option>`;
+                    });
+                }
+                
+                select.innerHTML = html;
+                updateStep4WalletInfo();
+            } catch (e) {
+                console.error('[Step4] Failed to refresh wallets:', e);
+            }
+        }
+        
+        // Handle Step 4 wallet selection (trustless only)
+        async function onStep4WalletSelect() {
+            const select = document.getElementById('step4WalletSelect');
+            const value = select.value;
+            if (!value) return;
+            
+            const [type, id] = value.split(':');
+            
+            S.walletType = 'trustless';
+            S.contractWallet = id;
+            S.walletId = null;
+            
+            const res = await fetch(`/api/contract/wallets/${id}?ownerWallet=${S.ownerWallet}`);
+            S.contractInfo = await res.json();
+            S.walletBalance = S.contractInfo.balanceSOL || 0;
+            
+            saveState();
+            updateStep4WalletInfo();
+            updateBalanceChecks();
+        }
+        
+        // Update Step 4 wallet info display
+        function updateStep4WalletInfo() {
+            const balEl = document.getElementById('step4WalletBal');
+            const lockEl = document.getElementById('step4WalletLock');
+            
+            if (S.contractInfo) {
+                balEl.textContent = `${(S.contractInfo.balanceSOL || 0).toFixed(4)} SOL`;
+                lockEl.textContent = S.contractInfo.isLocked ? `LOCKED ${S.contractInfo.lockRemaining}` : 'OPEN';
+            } else {
+                balEl.textContent = `${(S.walletBalance || 0).toFixed(4)} SOL`;
+                lockEl.textContent = 'N/A';
+            }
+            
+            // Update token mint field
+            const tokenField = document.getElementById('step4TokenMint');
+            if (S.tokenMint && tokenField) {
+                tokenField.value = S.tokenMint;
+            }
+        }
+        
+        // Handle token change in Step 4
+        function onStep4TokenChange() {
+            const tokenField = document.getElementById('step4TokenMint');
+            if (tokenField.value) {
+                S.tokenMint = tokenField.value.trim();
+                saveState();
+                startTokenDataRefresh();
+            }
+        }
+        
+        // Create a new contract wallet
+        async function createContractWallet() {
+            if (!S.ownerWallet) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            if (!connectedProvider) {
+                showError('Wallet not connected. Please reconnect.');
+                return;
+            }
+            
+            setLoading('btnCreateContractWallet', true);
+            
+            try {
+                // Get unsigned transaction from server
+                const res = await fetch('/api/contract/wallets/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ownerWallet: S.ownerWallet,
+                        lockDays: S.lockDays,
+                        strategy: 0, // Volume bot by default
+                        config: {
+                            tradeSizePct: 10,
+                            minDelaySecs: 30,
+                            maxDelaySecs: 120,
+                            slippageBps: 500
+                        }
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                addLog(`Signing transaction to create wallet with ${S.lockDays}-day lock...`, 'info');
+                
+                // Decode and sign transaction
+                const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+                const signedTx = await connectedProvider.signTransaction({
+                    serialize: () => txBuffer
+                });
+                
+                // Submit signed transaction
+                const submitRes = await fetch('/api/contract/submit-tx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signedTransaction: btoa(String.fromCharCode(...signedTx.serialize()))
+                    })
+                });
+                
+                const submitData = await submitRes.json();
+                if (submitData.error) {
+                    throw new Error(submitData.error);
+                }
+                
+                // Record in database
+                await fetch('/api/contract/wallets/record', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ownerWallet: S.ownerWallet,
+                        pdaAddress: data.pdaAddress,
+                        nonce: data.nonce,
+                        lockDays: S.lockDays,
+                        strategy: 0,
+                        signature: submitData.signature
+                    })
+                });
+                
+                // Select the new wallet
+                S.contractWallet = data.pdaAddress;
+                S.walletAddr = data.pdaAddress;
+                saveState();
+                
+                addLog(`Trustless wallet created: ${data.pdaAddress.slice(0, 8)}...`, 'info');
+                
+                // Now set up the operator for auto-trading
+                try {
+                    addLog(`Setting up operator for 24/7 trading...`, 'info');
+                    await setupOperator(data.pdaAddress);
+                    
+                    showSuccess(`Trustless Wallet Ready!\n\nPDA: ${data.pdaAddress.slice(0, 8)}...\nLock: ${S.lockDays} days\nAuto-Trading: ENABLED\n\nMM will run 24/7 on the server!\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                } catch (opErr) {
+                    console.warn('Operator setup failed:', opErr.message);
+                    showSuccess(`Trustless wallet created!\n\nPDA: ${data.pdaAddress.slice(0, 8)}...\nLock: ${S.lockDays} days\n\nNote: Auto-trading setup skipped.\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                }
+                
+                // Reload wallets and move to funding step
+                await loadContractWallets();
+                showStep(2);
+                
+            } catch (e) {
+                console.error('[Contract] Create wallet error:', e);
+                showError('Failed to create trustless wallet: ' + e.message);
+            } finally {
+                setLoading('btnCreateContractWallet', false);
+            }
+        }
+        
+        // Set up server operator for auto-trading
+        async function setupOperator(pdaAddress) {
+            if (!S.ownerWallet || !connectedProvider) {
+                throw new Error('Wallet not connected');
+            }
+            
+            // Get setOperator transaction from server
+            const res = await fetch(`/api/contract/wallets/${pdaAddress}/set-operator`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ownerWallet: S.ownerWallet
+                })
+            });
+            
+            const data = await res.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            addLog(`Operator: ${data.operatorPubkey.slice(0, 8)}...`, 'info');
+            
+            // Sign the setOperator transaction
+            const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+            const signedTx = await connectedProvider.signTransaction({
+                serialize: () => txBuffer
+            });
+            
+            // Submit
+            const submitRes = await fetch('/api/contract/submit-tx', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    signedTransaction: btoa(String.fromCharCode(...signedTx.serialize()))
+                })
+            });
+            
+            const submitData = await submitRes.json();
+            if (submitData.error) {
+                throw new Error(submitData.error);
+            }
+            
+            addLog(`Operator set - auto-trading enabled!`, 'info');
+            return submitData;
+        }
+        
+        // Enable auto-trading for currently selected wallet
+        async function enableAutoTrading() {
+            const pdaAddress = S.contractWallet;
+            if (!pdaAddress) {
+                showError('No trustless wallet selected');
+                return;
+            }
+            
+            if (!S.ownerWallet || !connectedProvider) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            
+            const btn = document.getElementById('btnEnableAutoTrading');
+            const origText = btn.textContent;
+            btn.textContent = 'Signing...';
+            btn.disabled = true;
+            
+            try {
+                await setupOperator(pdaAddress);
+                showSuccess('Auto-trading enabled! 24/7 market making is now active.');
+                updateOperatorStatus(true);
+            } catch (err) {
+                console.error('Enable auto-trading error:', err);
+                showError('Failed to enable auto-trading: ' + err.message);
+            } finally {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+        }
+        
+        // Update operator status display
+        function updateOperatorStatus(enabled) {
+            const statusText = document.getElementById('operatorStatusText');
+            const btn = document.getElementById('btnEnableAutoTrading');
+            
+            if (enabled) {
+                statusText.textContent = 'Enabled';
+                statusText.style.color = 'var(--emerald)';
+                btn.style.display = 'none';
+            } else {
+                statusText.textContent = 'Not Enabled';
+                statusText.style.color = '#f97316';
+                btn.style.display = 'block';
+            }
+        }
+        
+        // Check if operator is set for a wallet
+        async function checkOperatorStatus(pdaAddress) {
+            try {
+                const res = await fetch(`/api/contract/wallets/${pdaAddress}/info`);
+                const data = await res.json();
+                
+                // Check if operator is set (not null/undefined and not empty)
+                const hasOperator = data.operator && data.operator !== '11111111111111111111111111111111';
+                updateOperatorStatus(hasOperator);
+                return hasOperator;
+            } catch (err) {
+                console.warn('Check operator status error:', err);
+                updateOperatorStatus(false);
+                return false;
+            }
+        }
+        
+        // Deposit to contract wallet
+        async function depositToContract() {
+            if (!S.contractWallet || !S.ownerWallet || !connectedProvider) {
+                showError('Please select a trustless wallet and connect your wallet');
+                return;
+            }
+            
+            const amount = parseFloat(document.getElementById('depositAmount').value);
+            if (!amount || amount < 0.01) {
+                showError('Please enter a valid deposit amount (min 0.01 SOL)');
+                return;
+            }
+            
+            try {
+                // Get unsigned transaction
+                const res = await fetch(`/api/contract/wallets/${S.contractWallet}/deposit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ownerWallet: S.ownerWallet,
+                        amountSOL: amount
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                addLog(`Signing deposit of ${amount} SOL...`, 'info');
+                
+                // Sign with connected wallet
+                const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+                const signedTx = await connectedProvider.signTransaction({
+                    serialize: () => txBuffer
+                });
+                
+                // Submit
+                const submitRes = await fetch('/api/contract/submit-tx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signedTransaction: btoa(String.fromCharCode(...signedTx.serialize()))
+                    })
+                });
+                
+                const submitData = await submitRes.json();
+                if (submitData.error) {
+                    throw new Error(submitData.error);
+                }
+                
+                showSuccess(`Deposited ${amount} SOL to trustless wallet!\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                addLog(`Deposited ${amount} SOL`, 'buy');
+                
+                // Refresh balance
+                await refreshBal();
+                
+            } catch (e) {
+                console.error('[Contract] Deposit error:', e);
+                showError('Deposit failed: ' + e.message);
+            }
+        }
+        
+        // Withdraw from contract wallet
+        async function withdrawFromContract() {
+            if (!S.contractWallet || !S.ownerWallet || !connectedProvider) {
+                showError('Please select a trustless wallet and connect your wallet');
+                return;
+            }
+            
+            // Check if locked
+            if (S.contractInfo?.isLocked) {
+                showError(`Cannot withdraw: Wallet is locked.\nTime remaining: ${S.contractInfo.lockRemaining}`);
+                return;
+            }
+            
+            const amount = prompt('Enter amount to withdraw (SOL):', S.walletBalance.toFixed(4));
+            if (!amount) return;
+            
+            const amountNum = parseFloat(amount);
+            if (!amountNum || amountNum <= 0) {
+                showError('Invalid amount');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/contract/wallets/${S.contractWallet}/withdraw`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ownerWallet: S.ownerWallet,
+                        amountSOL: amountNum
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                addLog(`Signing withdrawal of ${amountNum} SOL...`, 'info');
+                
+                const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+                const signedTx = await connectedProvider.signTransaction({
+                    serialize: () => txBuffer
+                });
+                
+                const submitRes = await fetch('/api/contract/submit-tx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signedTransaction: btoa(String.fromCharCode(...signedTx.serialize()))
+                    })
+                });
+                
+                const submitData = await submitRes.json();
+                if (submitData.error) {
+                    throw new Error(submitData.error);
+                }
+                
+                showSuccess(`Withdrew ${amountNum} SOL!\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                addLog(`Withdrew ${amountNum} SOL`, 'sell');
+                
+                await refreshBal();
+                
+            } catch (e) {
+                console.error('[Contract] Withdraw error:', e);
+                showError('Withdrawal failed: ' + e.message);
+            }
+        }
+        
+        // Update trustless wallet UI on step 2
+        function updateTrustlessUI() {
+            const isTrustless = S.walletType === 'trustless';
+            
+            document.getElementById('regularFundSection').classList.toggle('hidden', isTrustless);
+            document.getElementById('trustlessFundSection').classList.toggle('hidden', !isTrustless);
+            document.getElementById('lockStatContainer').style.display = isTrustless ? 'block' : 'none';
+            document.getElementById('withdrawStatContainer').style.display = isTrustless ? 'block' : 'none';
+            
+            if (isTrustless && S.contractWallet) {
+                document.getElementById('trustlessAddr').textContent = S.contractWallet;
+                
+                if (S.contractInfo) {
+                    const locked = S.contractInfo.isLocked;
+                    document.getElementById('lockStatus').className = `lock-indicator ${locked ? 'locked' : 'unlocked'}`;
+                    document.getElementById('lockTimeRemaining').textContent = locked ? S.contractInfo.lockRemaining : 'Unlocked';
+                    document.getElementById('lockStat').textContent = locked ? S.contractInfo.lockRemaining : 'None';
+                    document.getElementById('btnWithdraw').disabled = locked;
+                }
+            }
+        }
+
+        // =====================================================================
+        // WebSocket
+        // =====================================================================
+        
+        let ws;
+        function connectWS() {
+            ws = new WebSocket(`ws://${location.host}`);
+            ws.onopen = () => {
+                document.getElementById('connStatus').innerHTML = '<span class="status-dot on"></span>Online';
+            };
+            ws.onclose = () => {
+                document.getElementById('connStatus').innerHTML = '<span class="status-dot off"></span>Offline';
+                setTimeout(connectWS, 3000);
+            };
+            ws.onmessage = e => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d.type === 'trade') {
+                        const isBuy = d.trade.type === 'buy';
+                        const amount = d.trade.amount ? d.trade.amount.toFixed(4) : '0';
+                        const logClass = isBuy ? 'buy' : 'sell';
+                        const arrow = isBuy ? '▲' : '▼';
+                        addLog(`${arrow} ${d.trade.type.toUpperCase()} ${amount} SOL`, logClass);
+                        // Record trade marker on chart
+                        recordTradeMarker(
+                            d.trade.type,
+                            d.trade.amount,
+                            d.trade.price || lastPrice,
+                            d.trade.marketCap || null,
+                            d.trade.signature
+                        );
+                        // Update transaction count and volume
+                        S.totalTrades = (S.totalTrades || 0) + 1;
+                        S.totalVolume = (S.totalVolume || 0) + parseFloat(d.trade.amount || 0);
+                        document.getElementById('mmTxCount').textContent = S.totalTrades;
+                        document.getElementById('mmVolume').textContent = S.totalVolume.toFixed(4) + ' SOL';
+                    }
+                    if (d.type === 'log') {
+                        addLog(d.message, d.logType || 'info');
+                    }
+                    // Handle bot-log messages from persistent bots
+                    if (d.type === 'bot-log') {
+                        const levelClass = d.level === 'error' ? 'error' : 
+                                          d.level === 'warn' ? 'warn' : 
+                                          d.level === 'trade' ? 'buy' : 'info';
+                        const prefix = d.tokenMint ? `[${d.tokenMint.slice(0,6)}]` : '';
+                        addLog(`${prefix} ${d.message}`, levelClass);
+                    }
+                    // Handle recent-logs on reconnect (persistent logs)
+                    if (d.type === 'recent-logs' && d.logs) {
+                        // Load persistent logs (most recent last)
+                        d.logs.forEach(log => {
+                            const levelClass = log.level === 'error' ? 'error' : 
+                                              log.level === 'warn' ? 'warn' : 
+                                              log.level === 'trade' ? 'buy' : 'info';
+                            const prefix = log.tokenMint ? `[${log.tokenMint.slice(0,6)}]` : '';
+                            addLogWithTime(`${prefix} ${log.message}`, levelClass, log.timestamp);
+                        });
+                    }
+                    // Handle persistent bot status updates
+                    if (d.type === 'persistent-bots') {
+                        // Calculate aggregate stats across ALL bots
+                        let totalTrades = 0;
+                        let totalVolume = 0;
+                        let anyRunning = false;
+                        let anyPaused = false;
+                        
+                        d.bots?.forEach(bot => {
+                            totalTrades += bot.stats?.totalTrades || 0;
+                            totalVolume += bot.stats?.totalVolume || 0;
+                            if (bot.isRunning && !bot.isPaused) anyRunning = true;
+                            if (bot.isPaused) anyPaused = true;
+                        });
+                        
+                        // Update UI with aggregate stats
+                        document.getElementById('mmTxCount').textContent = totalTrades;
+                        document.getElementById('mmVolume').textContent = totalVolume.toFixed(4) + ' SOL';
+                        S.totalTrades = totalTrades;
+                        S.totalVolume = totalVolume;
+                        
+                        // Update status
+                        if (anyRunning) {
+                            document.getElementById('mmStat').textContent = 'Running';
+                            document.getElementById('mmStat').className = 'stat-value green';
+                        } else if (anyPaused) {
+                            document.getElementById('mmStat').textContent = 'Waiting for Funds';
+                            document.getElementById('mmStat').className = 'stat-value yellow';
+                        }
+                    }
+                    if (d.type === 'error') {
+                        addLog(d.error, 'error');
+                        showError(d.error);
+                    }
+                    if (d.type === 'fees') addLog(`Claimed ${d.result?.totalClaimedSOL || 0} SOL in fees`, 'fee');
+                } catch (e) {}
+            };
+        }
+
+        function addLog(msg, type = '') {
+            const box = document.getElementById('logBox');
+            const t = new Date().toLocaleTimeString().slice(0, 5);
+            box.innerHTML = `<div class="log-item ${type}"><span class="log-time">${t}</span><span class="log-msg">${msg}</span></div>` + box.innerHTML;
+            // Keep log box manageable size
+            if (box.children.length > 200) {
+                box.removeChild(box.lastChild);
+            }
+        }
+        
+        // Add log with specific timestamp (for persistent logs)
+        function addLogWithTime(msg, type = '', timestamp) {
+            const box = document.getElementById('logBox');
+            const t = timestamp ? new Date(timestamp).toLocaleTimeString().slice(0, 5) : '--:--';
+            // Add to bottom for historical logs (they come in chronological order)
+            box.innerHTML += `<div class="log-item ${type}"><span class="log-time">${t}</span><span class="log-msg">${msg}</span></div>`;
+        }
+
+        // =====================================================================
+        // Navigation
+        // =====================================================================
+        
+        function showStep(n) {
+            S.step = n;
+            document.querySelectorAll('.step-btn').forEach((b, i) => {
+                b.classList.toggle('active', i + 1 === n);
+            });
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById('step' + i).classList.toggle('hidden', i !== n);
+            }
+            
+            // Update balance checks on step change
+            updateBalanceChecks();
+            
+            // Handle step 1 (wallet type toggle)
+            if (n === 1) {
+                // Restore wallet type UI state
+                setWalletType(S.walletType);
+            }
+            
+            // Handle step 2 (Fund Wallet) - update trustless UI
+            if (n === 2) {
+                updateTrustlessUI();
+                refreshBal();
+                
+                // Start REAL-TIME balance polling (every 2 sec)
+                startBalancePolling();
+                
+                // Refresh trustless wallet selector if in trustless mode
+                if (S.walletType === 'trustless') {
+                    refreshTrustlessSelect();
+                }
+            } else {
+                // Stop polling when leaving step 2
+                stopBalancePolling();
+            }
+            
+            // Handle step 3 (Create Token)
+            if (n === 3) {
+                refreshStep3Wallets();
+                updateStep3UI();
+            }
+            
+            // Handle step 4 (Market Maker)
+            if (n === 4) {
+                refreshStep4Wallets();
+                loadStrategies();
+                
+                // Set token mint in the input field
+                const tokenField = document.getElementById('step4TokenMint');
+                if (tokenField && S.tokenMint) {
+                    tokenField.value = S.tokenMint;
+                }
+                
+                if (S.tokenMint) {
+                    document.getElementById('mmToken').textContent = S.tokenMint.slice(0, 6) + '...' + S.tokenMint.slice(-4);
+                    startTokenDataRefresh(); // Start fetching token data
+                }
+            } else {
+                stopTokenDataRefresh(); // Stop when leaving step 4
+            }
+        }
+
+        function markDone(n) {
+            document.querySelectorAll('.step-btn')[n - 1].classList.add('done');
+        }
+
+        function updateBalanceChecks() {
+            // Step 3 balance check
+            const step3Check = document.getElementById('step3BalCheck');
+            if (S.walletBalance < 0.02) {
+                step3Check.innerHTML = '<div class="error-box">Insufficient funds! You need at least 0.02 SOL to create a token. Current balance: ' + S.walletBalance.toFixed(4) + ' SOL</div>';
+                document.getElementById('btnCreateToken').disabled = true;
+            } else {
+                step3Check.innerHTML = '';
+                document.getElementById('btnCreateToken').disabled = false;
+            }
+
+            // Step 4 balance check
+            const step4Check = document.getElementById('step4BalCheck');
+            if (S.walletBalance < 0.01) {
+                step4Check.innerHTML = '<div class="error-box">Insufficient funds! You need at least 0.01 SOL to run the market maker. Current balance: ' + S.walletBalance.toFixed(4) + ' SOL</div>';
+                document.getElementById('btnStart').disabled = true;
+            } else {
+                step4Check.innerHTML = '';
+                document.getElementById('btnStart').disabled = S.running;
+            }
+        }
+
+        // =====================================================================
+        // Step 1: Create Wallet
+        // =====================================================================
+        
+        async function loadWallets() {
+            if (!S.ownerWallet) {
+                console.log('[Wallets] Not connected, skipping load');
+                return;
+            }
+            
+            try {
+                const r = await fetch(`/api/wallets?ownerWallet=${encodeURIComponent(S.ownerWallet)}`);
+                const d = await r.json();
+                
+                const select = document.getElementById('walletSelect');
+                select.innerHTML = '<option value="">-- Select a wallet --</option>';
+                
+                if (d.wallets && d.wallets.length > 0) {
+                    d.wallets.forEach(w => {
+                        const opt = document.createElement('option');
+                        opt.value = w.id;
+                        opt.textContent = `${w.name} (${w.publicKey.slice(0,6)}...${w.publicKey.slice(-4)}) - ${w.balanceSOL.toFixed(4)} SOL`;
+                        opt.dataset.publicKey = w.publicKey;
+                        opt.dataset.balance = w.balanceSOL;
+                        select.appendChild(opt);
+                    });
+                    console.log(`[Wallets] Loaded ${d.wallets.length} wallets for ${S.ownerWallet.slice(0,8)}...`);
+                } else {
+                    console.log('[Wallets] No wallets found for this owner');
+                }
+            } catch (e) {
+                console.error('Load wallets error:', e);
+            }
+        }
+
+        function selectWallet() {
+            const select = document.getElementById('walletSelect');
+            const opt = select.options[select.selectedIndex];
+            
+            if (!opt.value) return;
+            
+            S.walletId = parseInt(opt.value);
+            S.walletAddr = opt.dataset.publicKey;
+            S.walletBalance = parseFloat(opt.dataset.balance) || 0;
+            saveState();
+            
+            document.getElementById('walletAddr').value = S.walletAddr;
+            document.getElementById('walletBal').textContent = S.walletBalance.toFixed(4) + ' SOL';
+            document.getElementById('mmBal').textContent = S.walletBalance.toFixed(4) + ' SOL';
+            
+            markDone(1);
+            showStep(2);
+            
+            // Update balance UI
+            if (S.walletBalance >= 0.01) {
+                document.getElementById('fundStatus').textContent = 'Funded';
+                document.getElementById('fundStatus').className = 'stat-value green';
+                document.getElementById('btnStep3').disabled = false;
+                document.getElementById('lowBalanceWarning').classList.add('hidden');
+                markDone(2);
+            } else {
+                document.getElementById('fundStatus').textContent = 'Low';
+                document.getElementById('fundStatus').className = 'stat-value red';
+            }
+            
+            updateBalanceChecks();
+            
+            // Start balance polling
+            setInterval(refreshBal, 10000);
+        }
+
+        async function createWallet() {
+            if (!S.ownerWallet) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            
+            const name = document.getElementById('walletName').value.trim() || 'MM Wallet';
+            setLoading('btnCreateWallet', true);
+            
+            try {
+                const r = await fetch('/api/mm/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, ownerWallet: S.ownerWallet })
+                });
+                
+                const d = await r.json();
+                
+                if (!r.ok) {
+                    throw new Error(d.error || 'Failed to create wallet');
+                }
+                
+                if (d.success) {
+                    S.walletId = d.walletId;
+                    S.walletAddr = d.publicKey;
+                    saveState(); // Persist to localStorage
+                    document.getElementById('walletAddr').value = d.publicKey;
+                    markDone(1);
+                    showStep(2);
+                    
+                    // Start balance polling
+                    refreshBal();
+                    setInterval(refreshBal, 10000);
+                    
+                    showSuccess('Wallet created! Send SOL to the address to continue.');
+                } else {
+                    throw new Error(d.error || 'Unknown error');
+                }
+            } catch (e) {
+                showError(e.message);
+            } finally {
+                setLoading('btnCreateWallet', false);
+            }
+        }
+
+        // =====================================================================
+        // Step 2: Fund Wallet
+        // =====================================================================
+        
+        function copyAddr() {
+            if (!S.walletAddr) {
+                showError('No wallet address to copy');
+                return;
+            }
+            navigator.clipboard.writeText(S.walletAddr).then(() => {
+                showSuccess('Address copied to clipboard!');
+            }).catch(() => {
+                showError('Failed to copy. Address: ' + S.walletAddr);
+            });
+        }
+
+        // Real-time balance polling
+        let balancePollingInterval = null;
+        let volumePollingInterval = null;
+        
+        function startBalancePolling() {
+            if (balancePollingInterval) return;
+            console.log('[Balance] Starting real-time polling (every 1s)');
+            balancePollingInterval = setInterval(() => {
+                refreshBal(true); // silent refresh
+            }, 1000); // Poll every 1 second for real-time feel
+            
+            // Also poll volume stats every 3 seconds
+            if (!volumePollingInterval) {
+                volumePollingInterval = setInterval(() => {
+                    fetchVolumeStats();
+                }, 3000);
+            }
+        }
+        
+        function stopBalancePolling() {
+            if (balancePollingInterval) {
+                clearInterval(balancePollingInterval);
+                balancePollingInterval = null;
+                console.log('[Balance] Stopped polling');
+            }
+        }
+        
+        async function refreshBal(silent = false) {
+            if (!silent) setLoading('btnRefresh', true);
+            
+            try {
+                let bal = null; // Use null to indicate no valid balance yet
+                
+                // Handle trustless wallet - always fetch fresh from RPC
+                if (S.walletType === 'trustless' && S.contractWallet) {
+                    // Add timestamp to bust cache
+                    const r = await fetch(`/api/contract/wallets/${S.contractWallet}?ownerWallet=${S.ownerWallet}&t=${Date.now()}`);
+                    if (!r.ok) return; // Don't update on fetch error
+                    
+                    const d = await r.json();
+                    if (d.error) return; // Don't update on API error
+                    
+                    // Only use valid balance
+                    if (typeof d.balanceSOL === 'number') {
+                        bal = d.balanceSOL;
+                        S.contractInfo = d;
+                        updateTrustlessUI();
+                    }
+                    
+                // Handle regular wallet
+                } else if (S.walletId) {
+                    const r = await fetch(`/api/wallets/${S.walletId}?t=${Date.now()}`);
+                    if (!r.ok) return; // Don't update on fetch error
+                    
+                    const d = await r.json();
+                    
+                    // Handle both { wallet: { balanceSOL } } and { balanceSOL } formats
+                    const rawBal = d.wallet?.balanceSOL ?? d.balanceSOL;
+                    if (typeof rawBal === 'number') {
+                        bal = rawBal;
+                    }
+                } else {
+                    return;
+                }
+                
+                // Only update UI if we got a valid balance
+                if (bal === null) return;
+                
+                // Only update UI if balance actually changed (avoid flicker)
+                const prevBal = S.walletBalance || 0;
+                if (Math.abs(bal - prevBal) > 0.000001) {
+                    console.log(`[Balance] Updated: ${prevBal.toFixed(4)} → ${bal.toFixed(4)} SOL`);
+                    S.walletBalance = bal;
+                    
+                    const walletBalEl = document.getElementById('walletBal');
+                    const mmBalEl = document.getElementById('mmBal');
+                    
+                    walletBalEl.textContent = bal.toFixed(4) + ' SOL';
+                    mmBalEl.textContent = bal.toFixed(4) + ' SOL';
+                    
+                    // Visual pulse on balance change (only for significant changes)
+                    if (Math.abs(bal - prevBal) > 0.001) {
+                        walletBalEl.style.color = 'var(--gold-light)';
+                        mmBalEl.style.color = 'var(--gold-light)';
+                        setTimeout(() => {
+                            walletBalEl.style.color = '';
+                            mmBalEl.style.color = '';
+                        }, 500);
+                    }
+                }
+                
+                if (bal >= 0.01) {
+                    document.getElementById('fundStatus').textContent = 'Funded';
+                    document.getElementById('fundStatus').className = 'stat-value green';
+                    document.getElementById('btnStep3').disabled = false;
+                    const warningEl = document.getElementById('lowBalanceWarning');
+                    if (warningEl) warningEl.classList.add('hidden');
+                    markDone(2);
+                } else {
+                    document.getElementById('fundStatus').textContent = 'Low';
+                    document.getElementById('fundStatus').className = 'stat-value red';
+                    document.getElementById('btnStep3').disabled = true;
+                    const warningEl = document.getElementById('lowBalanceWarning');
+                    if (warningEl) warningEl.classList.remove('hidden');
+                }
+                
+                updateBalanceChecks();
+            } catch (e) {
+                console.error('Balance refresh error:', e);
+            } finally {
+                setLoading('btnRefresh', false);
+            }
+        }
+
+        function goToStep3() {
+            if (!validateWalletExists()) return;
+            if (!validateHasFunds(0.02)) return;
+            showStep(3); // showStep now handles UI updates
+        }
+
+        // =====================================================================
+        // Step 3: Create Token
+        // =====================================================================
+        
+        function previewImage(input) {
+            const preview = document.getElementById('imagePreview');
+            const area = document.getElementById('imageUploadArea');
+            
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                
+                // Validate file size (5MB max)
+                if (file.size > 5 * 1024 * 1024) {
+                    showError('Image too large. Maximum size is 5MB.');
+                    input.value = '';
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Token preview">`;
+                    area.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.innerHTML = `
+                    <div class="upload-placeholder">
+                        <div style="font-size: 32px; margin-bottom: 8px;">+</div>
+                        <div>Click to upload image</div>
+                        <div style="font-size: 11px; color: #707070; margin-top: 4px;">PNG, JPG, GIF, WEBP (max 5MB)</div>
+                    </div>
+                `;
+                area.classList.remove('has-image');
+            }
+        }
+
+        async function createToken() {
+            if (!validateWalletExists()) return;
+            if (!validateHasFunds(0.02)) return;
+            
+            const name = document.getElementById('tokenName').value.trim();
+            const symbol = document.getElementById('tokenSymbol').value.trim().toUpperCase();
+            const imageInput = document.getElementById('tokenImage');
+            
+            if (!name) {
+                showError('Token name is required');
+                return;
+            }
+            if (!symbol) {
+                showError('Token symbol is required');
+                return;
+            }
+            if (symbol.length > 10) {
+                showError('Symbol must be 10 characters or less');
+                return;
+            }
+            if (!imageInput.files || !imageInput.files[0]) {
+                showError('Token image is required. Please upload an image.');
+                return;
+            }
+            
+            const initBuy = parseFloat(document.getElementById('initBuy').value) || 0;
+            const totalRequired = 0.02 + initBuy;
+            
+            if (S.walletBalance < totalRequired) {
+                showError(`Insufficient funds. Token creation needs 0.02 SOL + ${initBuy} SOL initial buy = ${totalRequired.toFixed(3)} SOL. You have ${S.walletBalance.toFixed(4)} SOL.`);
+                return;
+            }
+            
+            if (!S.ownerWallet) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            
+            setLoading('btnCreateToken', true);
+            
+            try {
+                // Check if using trustless wallet
+                if (S.walletType === 'trustless' && S.contractWallet) {
+                    // TRUSTLESS TOKEN CREATION - PDA becomes creator, fees go to vault!
+                    await createTokenTrustless(name, symbol);
+                } else {
+                    // REGULAR TOKEN CREATION - uses database wallet
+                    await createTokenRegular(name, symbol, initBuy);
+                }
+            } catch (e) {
+                showError(e.message);
+            } finally {
+                setLoading('btnCreateToken', false);
+            }
+        }
+        
+        // Regular token creation (database wallet)
+        async function createTokenRegular(name, symbol, initBuy) {
+            const formData = new FormData();
+            formData.append('walletId', S.walletId);
+            formData.append('ownerWallet', S.ownerWallet);
+            formData.append('name', name);
+            formData.append('symbol', symbol);
+            formData.append('description', document.getElementById('tokenDesc').value.trim() || `${name} - the best meme token`);
+            formData.append('twitter', document.getElementById('tokenTwitter').value.trim());
+            formData.append('telegram', document.getElementById('tokenTelegram').value.trim());
+            formData.append('initialBuySOL', initBuy);
+            formData.append('image', document.getElementById('tokenImage').files[0]);
+            
+            const r = await fetch('/api/tokens/create', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const d = await r.json();
+            
+            if (!r.ok) {
+                throw new Error(d.error || 'Failed to create token');
+            }
+            
+            if (d.mint) {
+                S.tokenMint = d.mint;
+                saveState();
+                markDone(3);
+                setupStep4();
+                showStep(4);
+                showSuccess(`Token ${symbol} created!\nMint: ${d.mint}`);
+                setTimeout(refreshBal, 2000);
+            } else {
+                throw new Error(d.error || 'No mint returned');
+            }
+        }
+        
+        // Trustless token creation (contract PDA becomes creator - fees to vault!)
+        async function createTokenTrustless(name, symbol) {
+            // Validate we have a trustless wallet
+            if (!S.contractWallet) {
+                throw new Error('No trustless wallet selected. Please create or select a trustless wallet in Step 1.');
+            }
+            
+            if (!S.contractInfo) {
+                throw new Error('Trustless wallet info not loaded. Please refresh the wallet in Step 2.');
+            }
+            
+            console.log('[Trustless] Creating token with wallet:', S.contractWallet);
+            console.log('[Trustless] Wallet info:', S.contractInfo);
+            
+            addLog(`Creating trustless token ${symbol}...`, 'info');
+            addLog('PDA will be the creator → fees go to vault!', 'info');
+            addLog(`Using wallet: ${S.contractWallet.slice(0,8)}...`, 'info');
+            
+            // Step 1: Upload metadata and get unsigned transaction
+            const formData = new FormData();
+            formData.append('ownerWallet', S.ownerWallet);
+            formData.append('name', name);
+            formData.append('symbol', symbol);
+            formData.append('description', document.getElementById('tokenDesc').value.trim() || `${name} - the best meme token`);
+            formData.append('twitter', document.getElementById('tokenTwitter').value.trim());
+            formData.append('telegram', document.getElementById('tokenTelegram').value.trim());
+            formData.append('website', document.getElementById('tokenWebsite')?.value?.trim() || '');
+            formData.append('image', document.getElementById('tokenImage').files[0]);
+            
+            const r = await fetch(`/api/contract/wallets/${S.contractWallet}/create-token`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const d = await r.json();
+            
+            if (!r.ok) {
+                // Provide detailed error info
+                let errorMsg = d.error || 'Failed to prepare token creation';
+                if (d.hint) errorMsg += `\n\nHint: ${d.hint}`;
+                if (d.details) console.error('[Trustless] Details:', d.details);
+                throw new Error(errorMsg);
+            }
+            
+            addLog(`Mint will be: ${d.mint.slice(0,8)}...`, 'info');
+            addLog(`Creator (vault): ${d.vaultPda.slice(0,8)}...`, 'info');
+            
+            // Step 2: Sign with user's wallet
+            if (!window.solana?.isConnected) {
+                throw new Error('Wallet not connected');
+            }
+            
+            addLog('Please sign the transaction in your wallet...', 'info');
+            
+            const txBuffer = Uint8Array.from(atob(d.transaction), c => c.charCodeAt(0));
+            const transaction = solanaWeb3.Transaction.from(txBuffer);
+            
+            const signed = await window.solana.signTransaction(transaction);
+            const signedBase64 = btoa(String.fromCharCode(...signed.serialize()));
+            
+            // Step 3: Submit to blockchain with token data for DB save
+            addLog('Submitting transaction...', 'tx');
+            
+            const submitRes = await fetch('/api/contract/submit-tx', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    signedTransaction: signedBase64,
+                    tokenData: {
+                        mint: d.mint,
+                        name: name,
+                        symbol: symbol,
+                        vaultPda: d.vaultPda,
+                        bondingCurve: d.bondingCurve,
+                        metadataUri: d.metadataUri || '',
+                        ownerWallet: S.connectedWallet,
+                        mmWalletAddress: S.contractWallet
+                    }
+                })
+            });
+            
+            const submitData = await submitRes.json();
+            
+            if (!submitRes.ok) {
+                throw new Error(submitData.error || 'Failed to submit transaction');
+            }
+            
+            // Success!
+            S.tokenMint = d.mint;
+            S.running = true; // Bot auto-started on server
+            saveState();
+            markDone(3);
+            await setupStep4();
+            showStep(4);
+            
+            showSuccess(`Token Created & MM Auto-Started!\n\nToken: ${name} (${symbol})\nMint: ${d.mint.slice(0,20)}...\nCreator: Vault PDA\n\nCreator fees (0.5%) go to your vault!\n\nMM BOT IS NOW ALWAYS RUNNING\nIt will trade 24/7 on the server.\n\nTX: ${submitData.signature.slice(0,20)}...`);
+            addLog(`Token created and saved to DB`, 'info');
+            addLog(`MM bot auto-started - runs forever!`, 'info');
+            
+            // Show always running status
+            document.getElementById('alwaysRunningStatus').style.display = 'block';
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('mmStat').textContent = 'Always Running';
+            document.getElementById('mmStat').className = 'stat-value green';
+            
+            setTimeout(refreshBal, 2000);
+        }
+
+        async function useExisting() {
+            if (!validateWalletExists()) return;
+            
+            const mint = document.getElementById('existingMint').value.trim();
+            
+            if (!mint) {
+                showError('Please enter a token mint address');
+                return;
+            }
+            
+            if (mint.length < 32 || mint.length > 50) {
+                showError('Invalid token mint address format');
+                return;
+            }
+            
+            // If using trustless wallet, record the token on the contract
+            if (S.walletType === 'trustless' && S.contractWallet) {
+                try {
+                    const r = await fetch(`/api/contract/wallets/${S.contractWallet}/set-token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ownerWallet: S.ownerWallet,
+                            tokenMint: mint
+                        })
+                    });
+                    
+                    const d = await r.json();
+                    if (!r.ok) {
+                        throw new Error(d.error || 'Failed to set token');
+                    }
+                    
+                    addLog(`Token ${mint.slice(0,8)}... linked to trustless wallet`, 'info');
+                } catch (e) {
+                    showError('Failed to link token: ' + e.message);
+                    return;
+                }
+            }
+            
+            S.tokenMint = mint;
+            saveState();
+            markDone(3);
+            setupStep4();
+            showStep(4);
+            showSuccess(`Using existing token: ${mint.slice(0,20)}...`);
+        }
+
+        // =====================================================================
+        // Step 4: Market Maker
+        // =====================================================================
+        
+        async function loadStrategies() {
+            console.log('[Strategies] Loading...');
+            const container = document.getElementById('strategiesContainer');
+            container.innerHTML = '<div style="color: #707070;">Loading strategies...</div>';
+            
+            try {
+                const r = await fetch('/api/mm/strategies');
+                if (!r.ok) throw new Error('Failed to fetch');
+                availableStrategies = await r.json();
+                console.log('[Strategies] Loaded:', availableStrategies);
+                renderStrategies();
+            } catch (e) {
+                console.error('Failed to load strategies:', e);
+                // Fallback strategies
+                availableStrategies = [
+                    { id: 'volume', name: 'Volume Bot', description: 'Simple buy/sell cycles to generate trading volume. Does not react to price.', difficulty: 'Beginner' },
+                    { id: 'price-reactive', name: 'Price Reactive', description: 'Monitors price changes - buys on dips, sells on pumps.', difficulty: 'Intermediate' },
+                    { id: 'grid', name: 'Grid Trading', description: 'Creates price grid levels for range trading.', difficulty: 'Advanced' },
+                    { id: 'trend-follower', name: 'Trend Follower', description: 'Follows price momentum using moving averages.', difficulty: 'Intermediate' },
+                    { id: 'spread-mm', name: 'Spread MM', description: 'Classic market maker - profits from bid-ask spread.', difficulty: 'Advanced' }
+                ];
+                renderStrategies();
+            }
+        }
+        
+        function renderStrategies() {
+            const container = document.getElementById('strategiesContainer');
+            container.innerHTML = '';
+            
+            availableStrategies.forEach(strat => {
+                const card = document.createElement('div');
+                card.className = 'strategy-card' + (S.strategy === strat.id ? ' selected' : '');
+                card.onclick = () => selectStrategy(strat.id);
+                
+                const diffClass = strat.difficulty.toLowerCase();
+                
+                card.innerHTML = `
+                    <div class="strategy-name">${strat.name}</div>
+                    <div class="strategy-desc">${strat.description}</div>
+                    <span class="strategy-difficulty ${diffClass}">${strat.difficulty}</span>
+                `;
+                
+                container.appendChild(card);
+            });
+        }
+        
+        function selectStrategy(strategyId) {
+            S.strategy = strategyId;
+            saveState();
+            renderStrategies();
+            
+            // Update the selected strategy display
+            const strategy = availableStrategies.find(s => s.id === strategyId);
+            if (strategy) {
+                document.getElementById('selectedStrategyName').textContent = strategy.name;
+                document.getElementById('selectedStrategyName').style.color = '#5cb85c';
+                document.getElementById('selectedStrategyDesc').textContent = strategy.description;
+            }
+            
+            addLog('Strategy selected: ' + (strategy?.name || strategyId), 'info');
+        }
+        
+        // Token Intelligence API - 500ms HTTP polling
+        let tokenDataInterval = null;
+        let lastPrice = null;
+        let currentSolPrice = 200; // Default SOL price
+        
+        // Fetch SOL price periodically
+        async function fetchSolPrice() {
+            try {
+                const r = await fetch('/api/sol-price');
+                if (r.ok) {
+                    const data = await r.json();
+                    if (data.price) {
+                        currentSolPrice = data.price;
+                    }
+                }
+            } catch (e) {}
+        }
+        
+        // Fetch SOL price on load and every 30 seconds
+        fetchSolPrice();
+        setInterval(fetchSolPrice, 30000);
+        
+        function updateTokenUI(data) {
+            // Update UI
+            document.getElementById('tokenMintFull').textContent = S.tokenMint;
+            
+            // Pool type badge
+            const poolEl = document.getElementById('tokenPoolType');
+            if (data.poolType === 'pump_bonding_curve') {
+                poolEl.textContent = 'Bonding Curve';
+                poolEl.className = 'pool-badge bonding';
+            } else if (data.poolType === 'pumpswap') {
+                poolEl.textContent = 'PumpSwap';
+                poolEl.className = 'pool-badge pumpswap';
+            } else {
+                poolEl.textContent = data.poolType || 'Unknown';
+                poolEl.className = 'pool-badge';
+            }
+            
+            // Graduated badge
+            const gradEl = document.getElementById('tokenGraduated');
+            if (data.graduated === true) {
+                gradEl.textContent = 'Graduated';
+                gradEl.className = 'grad-badge graduated';
+            } else if (data.graduated === false) {
+                gradEl.textContent = 'Active';
+                gradEl.className = 'grad-badge active';
+            } else {
+                gradEl.textContent = '-';
+                gradEl.className = 'grad-badge';
+            }
+            
+            // Price with change detection - USD primary, SOL secondary
+            const priceEl = document.getElementById('tokenPrice');
+            const priceSolEl = document.getElementById('tokenPriceSOL');
+            if (data.price && data.price > 0) {
+                const newPrice = data.price;
+                const priceUSD = data.priceUSD || (newPrice * currentSolPrice);
+                
+                // Show USD as primary value
+                priceEl.textContent = '$' + formatUSD(priceUSD);
+                priceSolEl.textContent = formatPrice(newPrice) + ' SOL';
+                
+                // Flash on price change
+                if (lastPrice !== null && lastPrice !== newPrice) {
+                    const isUp = newPrice > lastPrice;
+                    priceEl.style.color = isUp ? '#5cb85c' : '#d9534f';
+                    priceEl.style.transition = 'color 0.1s';
+                    setTimeout(() => { priceEl.style.color = '#e8a756'; }, 300);
+                }
+                lastPrice = newPrice;
+                // Cache last good values
+                window._lastTokenData = window._lastTokenData || {};
+                window._lastTokenData.price = newPrice;
+                window._lastTokenData.priceUSD = priceUSD;
+            } else if (window._lastTokenData?.price) {
+                // Use cached values to prevent glitch
+                priceEl.textContent = '$' + formatUSD(window._lastTokenData.priceUSD);
+                priceSolEl.textContent = formatPrice(window._lastTokenData.price) + ' SOL';
+            } else {
+                priceEl.textContent = '-';
+                priceSolEl.textContent = '-';
+            }
+            
+            // Market Cap - USD
+            const mcapEl = document.getElementById('tokenMcap');
+            if (data.marketCap && data.marketCap > 0) {
+                mcapEl.textContent = '$' + formatLargeNumber(data.marketCap);
+                mcapEl.classList.add('large');
+                window._lastTokenData = window._lastTokenData || {};
+                window._lastTokenData.marketCap = data.marketCap;
+            } else if (window._lastTokenData?.marketCap) {
+                mcapEl.textContent = '$' + formatLargeNumber(window._lastTokenData.marketCap);
+                mcapEl.classList.add('large');
+            } else {
+                mcapEl.textContent = '-';
+                mcapEl.classList.remove('large');
+            }
+            
+            // Liquidity - USD primary, SOL secondary
+            const liqEl = document.getElementById('tokenLiq');
+            const liqSolEl = document.getElementById('tokenLiqSOL');
+            if (data.liquidity && data.liquidity > 0) {
+                const liqUSD = data.liquidityUSD || (data.liquidity * currentSolPrice);
+                liqEl.textContent = '$' + formatLargeNumber(liqUSD);
+                liqSolEl.textContent = formatPrice(data.liquidity) + ' SOL';
+                window._lastTokenData = window._lastTokenData || {};
+                window._lastTokenData.liquidity = data.liquidity;
+                window._lastTokenData.liquidityUSD = liqUSD;
+            } else if (window._lastTokenData?.liquidity) {
+                liqEl.textContent = '$' + formatLargeNumber(window._lastTokenData.liquidityUSD);
+                liqSolEl.textContent = formatPrice(window._lastTokenData.liquidity) + ' SOL';
+            } else {
+                liqEl.textContent = '-';
+                liqSolEl.textContent = '-';
+            }
+            
+            // SOL Price - use live price
+            document.getElementById('solPrice').textContent = '$' + currentSolPrice.toFixed(2);
+            
+            // Also update MM Control panel - all in USD
+            const mmPriceEl = document.getElementById('mmPrice');
+            const priceUSD = data.priceUSD || (data.price * currentSolPrice);
+            if (mmPriceEl && data.price) {
+                mmPriceEl.textContent = '$' + formatUSD(priceUSD);
+                // Flash on price change
+                if (lastPrice !== null && lastPrice !== data.price) {
+                    mmPriceEl.style.color = data.price > lastPrice ? '#5cb85c' : '#d9534f';
+                    setTimeout(() => { mmPriceEl.style.color = '#e8e8e8'; }, 300);
+                }
+            }
+            document.getElementById('mmPriceUSD').textContent = data.price ? formatPrice(data.price) + ' SOL' : '-';
+            document.getElementById('mmMcap').textContent = data.marketCap ? '$' + formatLargeNumber(data.marketCap) : '-';
+            const liqUSD = data.liquidityUSD || (data.liquidity * currentSolPrice);
+            document.getElementById('mmLiq').textContent = data.liquidity ? '$' + formatLargeNumber(liqUSD) : '-';
+            
+            // DEX type
+            const mmDexEl = document.getElementById('mmDex');
+            if (data.poolType === 'pump_bonding_curve') {
+                mmDexEl.textContent = 'BONDING';
+            } else if (data.poolType === 'pump_amm' || data.poolType === 'pumpswap') {
+                mmDexEl.textContent = 'PUMPSWAP';
+            } else {
+                mmDexEl.textContent = data.poolType || '-';
+            }
+            
+            // Last update is now set in refreshTokenData() with actual data age
+        }
+        
+        async function refreshTokenData() {
+            if (!S.tokenMint) return;
+            
+            let data = null;
+            
+            // Try Token Intelligence API first
+            try {
+                const r = await fetch(`https://tokens.whistle.ninja/token/${S.tokenMint}?_t=${Date.now()}`, {
+                    cache: 'no-store'
+                });
+                if (r.ok) {
+                    data = await r.json();
+                    // Ensure USD values are calculated if missing
+                    if (data.price && !data.priceUSD) {
+                        data.priceUSD = data.price * currentSolPrice;
+                    }
+                    if (data.liquidity && !data.liquidityUSD) {
+                        data.liquidityUSD = data.liquidity * currentSolPrice;
+                    }
+                    if (data.lastUpdate) {
+                        const age = ((Date.now() - data.lastUpdate) / 1000).toFixed(1);
+                        document.getElementById('tokenLastUpdate').textContent = `API: ${age}s ago`;
+                    }
+                }
+            } catch (e) {
+                console.log('[TokenAPI] External API unavailable, using local');
+            }
+            
+            // Fallback to local bonding curve data (for new tokens not yet indexed)
+            if (!data || !data.price || data.price === 0) {
+                try {
+                    const r2 = await fetch(`/api/tokens/${S.tokenMint}/status`);
+                    if (r2.ok) {
+                        const localData = await r2.json();
+                        // Map local data to expected format using live SOL price
+                        data = {
+                            mint: S.tokenMint,
+                            poolType: localData.dex === 'pump' ? 'pump_bonding_curve' : 'pumpswap',
+                            price: localData.price || 0,
+                            priceUSD: localData.priceUSD || (localData.price * currentSolPrice),
+                            marketCap: localData.marketCapSOL ? localData.marketCapSOL * currentSolPrice : 0,
+                            liquidity: localData.liquiditySOL || 0,
+                            liquidityUSD: localData.liquiditySOL ? localData.liquiditySOL * currentSolPrice : 0,
+                            graduated: localData.migrated || false,
+                            lastUpdate: Date.now()
+                        };
+                        document.getElementById('tokenLastUpdate').textContent = 'RPC: Live';
+                    }
+                } catch (e2) {
+                    console.error('[TokenAPI] Local fallback error:', e2);
+                }
+            }
+            
+            if (data) {
+                updateTokenUI(data);
+                savePricePoint(data);
+            } else {
+                // No data available - show placeholder
+                document.getElementById('tokenLastUpdate').textContent = 'No data yet';
+                document.getElementById('tokenPrice').textContent = 'Waiting...';
+                document.getElementById('tokenMcap').textContent = 'Waiting...';
+            }
+        }
+        
+        function formatPrice(price) {
+            if (!price || price === 0) return '0';
+            if (price < 0.000001) return price.toExponential(2);
+            if (price < 0.001) return price.toFixed(8);
+            if (price < 1) return price.toFixed(6);
+            return price.toFixed(4);
+        }
+        
+        function formatUSD(value) {
+            if (!value || value === 0) return '0.00';
+            if (value < 0.000001) return value.toExponential(2);
+            if (value < 0.0001) return value.toFixed(8);
+            if (value < 0.01) return value.toFixed(6);
+            if (value < 1) return value.toFixed(4);
+            return value.toFixed(2);
+        }
+        
+        function formatLargeNumber(num) {
+            if (!num || num === 0) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+            return num.toFixed(2);
+        }
+        
+        // =====================================================================
+        // MARKET CAP CHART
+        // =====================================================================
+        
+        let mcapChart = null;
+        let chartRange = '1h';
+        let chartUpdateInterval = null;
+        
+        function initChart() {
+            const ctx = document.getElementById('mcapChart');
+            if (!ctx) return;
+            
+            // Destroy existing chart
+            if (mcapChart) {
+                mcapChart.destroy();
+            }
+            
+            mcapChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Market Cap',
+                            data: [],
+                            borderColor: '#5cb85c',
+                            backgroundColor: 'rgba(92, 184, 92, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#242424',
+                            titleColor: '#e8e8e8',
+                            bodyColor: '#a0a0a0',
+                            borderColor: '#3d3d3d',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: (ctx) => {
+                                    if (ctx.dataset.label === 'Market Cap') {
+                                        return '$' + formatLargeNumber(ctx.parsed.y);
+                                    }
+                                    return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + ' SOL';
+                                }
+                            }
+                        },
+                        annotation: {
+                            annotations: {}
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                displayFormats: {
+                                    second: 'HH:mm:ss',
+                                    minute: 'HH:mm',
+                                    hour: 'HH:mm'
+                                }
+                            },
+                            grid: { color: '#2d2d2d' },
+                            ticks: { color: '#707070', maxRotation: 0 }
+                        },
+                        y: {
+                            position: 'right',
+                            grid: { color: '#2d2d2d' },
+                            ticks: {
+                                color: '#707070',
+                                callback: (v) => '$' + formatLargeNumber(v)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function setChartRange(range) {
+            chartRange = range;
+            // Update button states
+            document.querySelectorAll('.chart-range-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase() === range);
+            });
+            loadChartData();
+        }
+        
+        async function loadChartData() {
+            if (!S.tokenMint || !mcapChart) return;
+            
+            try {
+                const r = await fetch(`/api/chart/${S.tokenMint}?range=${chartRange}`);
+                const data = await r.json();
+                
+                // Update market cap line
+                const mcapData = data.prices.map(p => ({
+                    x: new Date(p.timestamp),
+                    y: p.marketCap || 0
+                }));
+                
+                mcapChart.data.datasets[0].data = mcapData;
+                
+                // Add trade markers as annotations
+                const annotations = {};
+                data.trades.forEach((trade, i) => {
+                    const isBuy = trade.type === 'buy';
+                    annotations['trade' + i] = {
+                        type: 'point',
+                        xValue: new Date(trade.timestamp),
+                        yValue: trade.marketCap || mcapData.find(d => d.x >= new Date(trade.timestamp))?.y || 0,
+                        backgroundColor: isBuy ? '#00ff88' : '#ff4444',
+                        borderColor: isBuy ? '#00ff88' : '#ff4444',
+                        radius: 6,
+                        borderWidth: 2
+                    };
+                });
+                
+                if (mcapChart.options.plugins.annotation) {
+                    mcapChart.options.plugins.annotation.annotations = annotations;
+                }
+                
+                mcapChart.update('none');
+                
+                // Update data points counter
+                document.getElementById('chartDataPoints').textContent = `${data.prices.length} points, ${data.trades.length} trades`;
+                
+            } catch (e) {
+                console.error('[Chart] Load error:', e);
+            }
+        }
+        
+        async function savePricePoint(data) {
+            if (!S.tokenMint || !data.price) return;
+            
+            try {
+                await fetch('/api/chart/price', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mint: S.tokenMint,
+                        price: data.price,
+                        priceUSD: data.priceUSD,
+                        marketCap: data.marketCap,
+                        liquidity: data.liquidity
+                    })
+                });
+            } catch (e) {
+                // Silent fail
+            }
+        }
+        
+        async function recordTradeMarker(type, amountSOL, price, marketCap, signature) {
+            if (!S.tokenMint) return;
+            
+            try {
+                await fetch('/api/chart/trade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mint: S.tokenMint,
+                        type,
+                        amountSOL,
+                        price,
+                        marketCap,
+                        signature
+                    })
+                });
+                // Reload chart to show new marker
+                loadChartData();
+            } catch (e) {
+                console.error('[Chart] Trade marker error:', e);
+            }
+        }
+        
+        function startChartUpdates() {
+            initChart();
+            loadChartData();
+            // Update chart every 5 seconds
+            if (chartUpdateInterval) clearInterval(chartUpdateInterval);
+            chartUpdateInterval = setInterval(loadChartData, 5000);
+        }
+        
+        function stopChartUpdates() {
+            if (chartUpdateInterval) {
+                clearInterval(chartUpdateInterval);
+                chartUpdateInterval = null;
+            }
+        }
+        
+        // Pure HTTP polling - updates when token has on-chain activity
+        function startTokenDataRefresh() {
+            if (!S.tokenMint) return;
+            
+            // Stop any existing interval
+            stopTokenDataRefresh();
+            
+            // Initial fetch
+            refreshTokenData();
+            
+            // 500ms polling - catches updates as soon as they happen
+            tokenDataInterval = setInterval(refreshTokenData, 500);
+            
+            // Update both status indicators
+            ['tokenDataSource', 'tokenDataSource2'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.textContent = 'Polling (500ms)';
+                    el.style.color = '#5cb85c';
+                }
+            });
+            
+            // Start chart updates
+            startChartUpdates();
+        }
+        
+        function stopTokenDataRefresh() {
+            if (tokenDataInterval) {
+                clearInterval(tokenDataInterval);
+                tokenDataInterval = null;
+            }
+            stopChartUpdates();
+        }
+        
+        async function setupStep4() {
+            if (S.tokenMint) {
+                document.getElementById('mmToken').textContent = S.tokenMint.slice(0, 6) + '...' + S.tokenMint.slice(-4);
+                startTokenDataRefresh();
+                
+                // Check if a persistent bot is already running for this token
+                const botExists = await checkExistingBot();
+                if (botExists) {
+                    addLog('Found existing bot - already running!', 'info');
+                }
+            }
+            loadStrategies();
+        }
+
+        async function startMM() {
+            if (!S.ownerWallet) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            if (!validateWalletExists()) return;
+            if (!validateTokenExists()) return;
+            
+            // Require strategy selection
+            if (!S.strategy) {
+                showError('Please select a strategy above before starting the market maker');
+                return;
+            }
+            
+            // Get selected strategy info
+            const strategy = availableStrategies.find(s => s.id === S.strategy);
+            if (!strategy) {
+                showError('Selected strategy not found. Please select again.');
+                return;
+            }
+            
+            setLoading('btnStart', true);
+            addLog(`Starting persistent ${strategy.name}...`, 'info');
+            
+            try {
+                // Use persistent bot API for trustless wallets
+                const r = await fetch('/api/persistent-bots/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        tokenMint: S.tokenMint,
+                        pdaAddress: S.contractWallet,
+                        ownerWallet: S.ownerWallet
+                    })
+                });
+                
+                const d = await r.json();
+                
+                if (!r.ok) {
+                    throw new Error(d.error || 'Failed to start market maker');
+                }
+                
+                if (d.success) {
+                    S.running = true;
+                    // Fetch current tx count (don't reset to 0!)
+                    fetchVolumeStats();
+                    document.getElementById('mmStat').textContent = 'Always Running';
+                    document.getElementById('mmStat').className = 'stat-value green';
+                    document.getElementById('btnStart').disabled = true;
+                    document.getElementById('alwaysRunningStatus').style.display = 'block';
+                    markDone(4);
+                    
+                    const strategyName = d.strategyName || strategy.name;
+                    addLog(`Persistent bot started - runs forever!`, 'info');
+                    addLog(`Bot will continue even if you close this page`, 'info');
+                    showSuccess(`MM is now ALWAYS RUNNING!\n\nThe bot runs on the server 24/7. It will:\n- Continue trading even if you close this page\n- Auto-resume when funds are deposited\n- Never stop until the token migrates`);
+                    
+                    // Start status polling
+                    startPersistentBotPolling();
+                } else {
+                    throw new Error(d.error || 'Unknown error');
+                }
+            } catch (e) {
+                addLog(`Failed to start: ${e.message}`, 'error');
+                showError(e.message);
+            } finally {
+                setLoading('btnStart', false);
+            }
+        }
+        
+        // Poll persistent bot status
+        function startPersistentBotPolling() {
+            setInterval(async () => {
+                if (!S.tokenMint) return;
+                
+                try {
+                    const r = await fetch(`/api/persistent-bots/${S.tokenMint}`);
+                    if (r.ok) {
+                        const status = await r.json();
+                        
+                        // Update UI
+                        if (status.isPaused) {
+                            document.getElementById('mmStat').textContent = 'Waiting for Funds';
+                            document.getElementById('mmStat').className = 'stat-value yellow';
+                            addLog(`Bot paused: ${status.pauseReason || 'insufficient funds'}`, 'warn');
+                        } else if (status.isRunning) {
+                            document.getElementById('mmStat').textContent = 'Always Running';
+                            document.getElementById('mmStat').className = 'stat-value green';
+                        }
+                        
+                        // Update stats
+                        if (status.stats) {
+                            document.getElementById('mmTxCount').textContent = status.stats.totalTrades || 0;
+                        }
+                    }
+                } catch (e) {
+                    // Silent fail
+                }
+            }, 10000); // Every 10 seconds
+        }
+
+        // Update strategy for running bot
+        async function updateStrategy() {
+            if (!S.tokenMint) {
+                showError('No token selected');
+                return;
+            }
+            
+            if (!S.strategy) {
+                showError('Please select a strategy first');
+                return;
+            }
+            
+            try {
+                const r = await fetch(`/api/persistent-bots/${S.tokenMint}/strategy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        strategy: S.strategy,
+                        config: {}
+                    })
+                });
+                
+                const d = await r.json();
+                
+                if (d.success) {
+                    addLog(`Strategy updated to: ${S.strategy}`, 'info');
+                    showSuccess('Strategy updated! Changes will apply on the next trade cycle.');
+                } else {
+                    throw new Error(d.error || 'Failed to update strategy');
+                }
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+        
+        // Check if bot is already running for this token
+        async function checkExistingBot() {
+            if (!S.tokenMint) return;
+            
+            try {
+                const r = await fetch(`/api/persistent-bots/${S.tokenMint}`);
+                if (r.ok) {
+                    const status = await r.json();
+                    
+                    if (status.isRunning) {
+                        S.running = true;
+                        document.getElementById('btnStart').disabled = true;
+                        document.getElementById('alwaysRunningStatus').style.display = 'block';
+                        
+                        if (status.isPaused) {
+                            document.getElementById('mmStat').textContent = 'Waiting for Funds';
+                            document.getElementById('mmStat').className = 'stat-value yellow';
+                        } else {
+                            document.getElementById('mmStat').textContent = 'Always Running';
+                            document.getElementById('mmStat').className = 'stat-value green';
+                        }
+                        
+                        addLog('Bot is running on server', 'info');
+                        startPersistentBotPolling();
+                        return true;
+                    }
+                }
+            } catch (e) {
+                // Bot doesn't exist yet
+            }
+            return false;
+        }
+        
+        // Legacy stopMM - kept for reference but disabled for trustless wallets
+        async function stopMM() {
+            showError('Trustless wallet bots run forever and cannot be stopped. They will pause automatically when funds run out and resume when deposited.');
+            return;
+            
+            // Legacy code below (not executed)
+            if (!S.mmId) {
+                showError('Market maker is not running');
+                return;
+            }
+            
+            try {
+                const r = await fetch(`/api/mm/${S.mmId}/stop`, { method: 'POST' });
+                const d = await r.json();
+                
+                S.running = false;
+                document.getElementById('mmStat').textContent = 'Stopped';
+                document.getElementById('mmStat').className = 'stat-value red';
+                document.getElementById('btnStart').disabled = false;
+                addLog('Market maker stopped');
+            } catch (e) {
+                showError(e.message);
+            } finally {
+                setLoading('btnStop', false);
+            }
+        }
+
+        async function claimFees() {
+            // Can claim fees with just a wallet - don't need MM running
+            if (!S.walletId) {
+                showError('Please select a wallet first');
+                return;
+            }
+            
+            addLog('Checking and claiming fees...', 'info');
+            
+            try {
+                // Use wallet-based fee claim endpoint (works without MM running)
+                const r = await fetch(`/api/fees/${S.walletId}/claim`, { method: 'POST' });
+                const d = await r.json();
+                
+                if (!r.ok) {
+                    throw new Error(d.error || 'Failed to claim fees');
+                }
+                
+                if (d.totalClaimedSOL > 0) {
+                    addLog(`Claimed ${d.totalClaimedSOL.toFixed(4)} SOL in fees`, 'fee');
+                    showSuccess(`Claimed ${d.totalClaimedSOL.toFixed(4)} SOL in creator fees!`);
+                    // Refresh balance
+                    setTimeout(refreshBal, 2000);
+                } else {
+                    addLog('No fees to claim at this time', 'info');
+                    showWarning('No fees available to claim');
+                }
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+
+        async function refreshMM() {
+            if (!S.mmId) return;
+            
+            try {
+                const r = await fetch(`/api/mm/${S.mmId}/status`);
+                const d = await r.json();
+                
+                if (d.balanceSOL !== undefined) {
+                    S.walletBalance = d.balanceSOL;
+                    document.getElementById('mmBal').textContent = d.balanceSOL.toFixed(4) + ' SOL';
+                    document.getElementById('walletBal').textContent = d.balanceSOL.toFixed(4) + ' SOL';
+                }
+                if (d.totalTrades !== undefined) {
+                    document.getElementById('mmTxCount').textContent = d.totalTrades;
+                }
+                
+                updateBalanceChecks();
+            } catch (e) {}
+        }
+
+        // =====================================================================
+        // Init
+        // =====================================================================
+        
+        async function init() {
+            connectWS();
+            loadState(); // Load saved state from localStorage
+            
+            // Check wallet connection FIRST
+            const isConnected = await checkWalletConnection();
+            
+            if (isConnected) {
+                // Wallet is connected - load data
+                await loadWallets();
+                
+                // ALWAYS fetch volume stats on init
+                fetchVolumeStats();
+                
+                // If we have a saved wallet, restore the UI
+                if (S.walletId && S.walletAddr) {
+                    document.getElementById('walletAddr').value = S.walletAddr;
+                    markDone(1);
+                    
+                    // Start balance polling
+                    refreshBal();
+                    startBalancePolling(); // Use the proper function that also polls volume
+                    
+                    if (S.tokenMint) {
+                        markDone(2);
+                        markDone(3);
+                        setupStep4();
+                        showStep(4);
+                    } else {
+                        showStep(2);
+                    }
+                } else if (S.contractWallet) {
+                    // Trustless wallet - restore UI
+                    markDone(1);
+                    refreshBal();
+                    startBalancePolling();
+                    
+                    if (S.tokenMint) {
+                        markDone(2);
+                        markDone(3);
+                        setupStep4();
+                        showStep(4);
+                    } else {
+                        showStep(2);
+                    }
+                } else {
+                    showStep(1);
+                }
+            } else {
+                // Not connected - show auth overlay (already visible by default)
+                showStep(1);
+            }
+        }
+        
+        // Run init
+        init();
+    </script>
+</body>
+</html>

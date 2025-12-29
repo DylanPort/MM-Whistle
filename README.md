@@ -1,173 +1,222 @@
-# MM Wallet v2.0
+# MM Wallet - Backend & Frontend
 
-**Automated Market Making on Pump.fun**
+**Automated Market Making Platform for Pump.fun Tokens**
 
-A Solana smart contract that enables automated market making on Pump.fun tokens with built-in security features.
+This is the complete backend and frontend application for the MM Wallet smart contract system. It provides a modern web interface for creating trustless PDA wallets, launching tokens, and running 24/7 automated market making strategies.
 
-## 🚀 Deployed
+## 🌐 Live Demo
 
-**Program ID**: `4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5`
+Connect your Phantom or Solflare wallet to get started.
 
-**Network**: Solana Mainnet
+---
 
 ## ✨ Features
 
-- **PDA Wallets** - Create secure wallets tied to your address
-- **Token Creation** - Create Pump.fun tokens with PDA as creator (earns 0.5% fees)
-- **Bonding Curve Trading** - Buy/sell on Pump.fun bonding curves
-- **AMM Trading** - Trade on PumpSwap for migrated tokens
-- **Lock Mechanism** - Lock funds up to 365 days for trust
-- **Multi-Strategy** - 6 different trading strategies
-- **Operator Delegation** - Delegate trading rights while maintaining ownership
+### Frontend (`web/`)
+- **Modern Dark UI** - Sleek, professional interface with glassmorphism effects
+- **Wallet Integration** - Phantom, Solflare, Backpack, Coinbase, Trust Wallet
+- **Real-time Updates** - Live balance, transaction counts, and bot status
+- **Landing Page** - Public showcase of all trustless wallets and tokens
 
-## 🔐 Security Features
+### Backend (`server.js` + `src/`)
+- **Express.js API** - RESTful endpoints for all operations
+- **WebSocket** - Real-time bot logs and status updates
+- **SQLite Database** - Persistent storage for wallets, tokens, and bot stats
+- **Persistent Bots** - 24/7 market making that survives server restarts
 
-| Feature | Description |
-|---------|-------------|
-| ✅ Authorization | Owner/Operator separation |
-| ✅ Slippage Protection | On-chain calculation (0.1% - 50%) |
-| ✅ Trade Limits | Max 50% of balance per trade |
-| ✅ Rate Limiting | Prevents rapid trade abuse |
-| ✅ Rent Reserve | Minimum 0.01 SOL always kept |
-| ✅ Program Validation | Only allows Pump.fun/PumpSwap CPI |
-| ✅ Lock Periods | Funds can be locked for trust |
-
-## 📋 Trading Strategies
-
-| Strategy | ID | Description |
-|----------|:--:|-------------|
-| VolumeBot | 0 | Generates trading volume |
-| PriceReactive | 1 | Reacts to price movements |
-| GridTrading | 2 | Grid-based buy/sell orders |
-| TrendFollower | 3 | Follows market trends |
-| SpreadMM | 4 | Traditional market making |
-| PumpHunter | 5 | Targets pumping tokens |
+---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     MM Wallet System                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  User Wallet                                                │
-│       │                                                     │
-│       ▼                                                     │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │  MM Wallet  │───▶│  PDA Wallet │───▶│  Pump.fun   │     │
-│  │  (Config)   │    │   (SOL)     │    │ / PumpSwap  │     │
-│  └─────────────┘    └─────────────┘    └─────────────┘     │
-│       │                    │                                │
-│       │               Tokens ◀──────────────────────────────│
-│       │                    │                                │
-│       └────── Operator ────┘                                │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        MM Wallet Platform                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     │
+│  │   Frontend   │────▶│   Backend    │────▶│   Contract   │     │
+│  │  (index.html)│     │  (server.js) │     │  (On-chain)  │     │
+│  └──────────────┘     └──────────────┘     └──────────────┘     │
+│         │                    │                    │              │
+│         │              ┌─────┴─────┐              │              │
+│         │              │           │              │              │
+│         ▼              ▼           ▼              ▼              │
+│  ┌──────────────┐ ┌─────────┐ ┌─────────┐ ┌──────────────┐      │
+│  │   Wallet     │ │ SQLite  │ │ WebSocket│ │  Pump.fun    │      │
+│  │  Connection  │ │   DB    │ │  Server  │ │  / PumpSwap  │      │
+│  └──────────────┘ └─────────┘ └─────────┘ └──────────────┘      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Instructions (15 total)
+---
 
-### Initialization
-- `initialize` - Create new MM wallet
+## 📁 Project Structure
 
-### Deposits & Withdrawals
-- `deposit` - Deposit SOL to PDA
-- `withdraw` - Withdraw SOL (owner only, after lock)
-- `withdrawTokens` - Withdraw tokens (owner only, after lock)
+```
+pump-mm-direct/
+├── server.js                 # Main Express server
+├── package.json              # Dependencies
+├── .env                      # Environment variables (create this)
+├── web/
+│   ├── index.html            # Main application UI
+│   └── landing.html          # Public landing page
+└── src/
+    ├── constants.js          # Program IDs, RPC URLs
+    ├── contract/
+    │   └── index.js          # Smart contract interaction
+    ├── mm/
+    │   ├── persistent-bot-manager.js  # 24/7 bot management
+    │   ├── market-maker.js   # Trading logic
+    │   └── strategies/       # Trading strategies
+    │       ├── volume-bot.js
+    │       ├── price-reactive.js
+    │       ├── grid-bot.js
+    │       ├── trend-follower.js
+    │       ├── spread-mm.js
+    │       └── pump-hunter.js
+    ├── trading/
+    │   ├── bonding-curve.js  # Pump.fun trading
+    │   ├── pumpswap.js       # PumpSwap AMM
+    │   └── index.js          # Trade router
+    ├── price/
+    │   └── tracker.js        # Price monitoring
+    └── utils/
+        ├── pda.js            # PDA derivation
+        └── token-discovery.js # Token detection
+```
 
-### Trading
-- `executeBuy` - Buy on Pump.fun bonding curve
-- `executeSell` - Sell on Pump.fun bonding curve
-- `executeSwap` - Swap on PumpSwap AMM
+---
 
-### Token Management
-- `createToken` - Create token with PDA as creator
-- `setTokenMint` - Set token mint after creation
-- `claimFees` - Claim creator fees
+## 🚀 Quick Start
 
-### Configuration
-- `updateStrategy` - Change trading strategy
-- `setOperator` - Update authorized operator
-- `pause` - Pause trading
-- `resume` - Resume trading
-- `extendLock` - Extend lock period
-
-## 🔧 Build
+### 1. Install Dependencies
 
 ```bash
-# Install dependencies
-cargo install anchor-cli
-
-# Build
-anchor build
-
-# Deploy (mainnet)
-solana program deploy target/deploy/mm_wallet_v2.so \
-  --program-id target/deploy/mm_wallet_v2-keypair.json \
-  --url mainnet-beta
+npm install
 ```
 
-## 📝 Usage Example
+### 2. Configure Environment
 
-```javascript
-import { Program } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+Create a `.env` file:
 
-// Derive PDA
-const [mmWallet] = PublicKey.findProgramAddressSync(
-  [Buffer.from("mm_wallet"), wallet.publicKey.toBuffer(), new BN(0).toArrayLike(Buffer, "le", 8)],
-  programId
-);
-
-// Initialize wallet
-await program.methods
-  .initialize(
-    new BN(0),           // nonce
-    new BN(86400),       // lock 1 day
-    { volumeBot: {} },   // strategy
-    {
-      tradeSizePct: 10,
-      minDelaySecs: 5,
-      maxDelaySecs: 30,
-      slippageBps: 300,  // 3%
-      param1: 0,
-      param2: 0,
-      param3: 0,
-      reserved: new Array(32).fill(0)
-    },
-    operatorPubkey
-  )
-  .accounts({
-    mmWallet,
-    pdaWallet: mmWallet,
-    owner: wallet.publicKey,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
+```env
+RPC_URL=https://api.mainnet-beta.solana.com
+PORT=3333
+OPERATOR_PRIVATE_KEY=  # Auto-generated on first run
 ```
 
-## 🔗 Integrations
+### 3. Start Server
 
-| Program | ID | Usage |
-|---------|-----|-------|
-| **Pump.fun** | `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P` | Token creation, bonding curve |
-| **PumpSwap** | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA` | AMM swaps 
+```bash
+node server.js
+```
 
-## ⚙️ Configuration Limits
+### 4. Access Application
 
-| Parameter | Min | Max | Description |
-|-----------|-----|-----|-------------|
-| `tradeSizePct` | 1 | 50 | Max % of balance per trade |
-| `slippageBps` | 10 | 5000 | 0.1% to 50% slippage |
-| `lockSeconds` | 0 | 31,536,000 | Up to 1 year |
-| Total Lock | - | 157,680,000 | Max 5 years cumulative |
+Open `http://localhost:3333` in your browser.
+
+---
+
+## 🔌 API Endpoints
+
+### Wallet Operations
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/contract/wallets` | GET | Get user's trustless wallets |
+| `/api/contract/wallets/:address` | GET | Get wallet details |
+| `/api/contract/wallets/:address/balance` | GET | Get real-time balance |
+| `/api/contract/create-wallet` | POST | Create new PDA wallet |
+
+### Token Operations
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/contract/wallets/:address/create-token` | POST | Create token via PDA |
+| `/api/contract/wallets/:address/tokens` | GET | Get wallet's tokens |
+
+### Trading Operations
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/persistent-bots` | GET | Get all bot statuses |
+| `/api/persistent-bots/start` | POST | Start persistent MM |
+| `/api/persistent-bots/update-strategy` | POST | Update bot strategy |
+| `/api/set-operator` | POST | Set operator for PDA |
+
+### Landing Page
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/landing/tokens` | GET | All public tokens with data |
+| `/api/landing/stats` | GET | Platform statistics |
+
+---
+
+## 🤖 Trading Strategies
+
+| Strategy | Description | Best For |
+|----------|-------------|----------|
+| **VolumeBot** | Generates consistent trading volume | New tokens |
+| **PriceReactive** | Responds to price movements | Volatile markets |
+| **GridTrading** | Buy low, sell high in ranges | Sideways markets |
+| **TrendFollower** | Follows momentum | Trending tokens |
+| **SpreadMM** | Traditional market making | Established tokens |
+| **PumpHunter** | Aggressive buying on pumps | High-risk plays |
+
+---
+
+## 🔐 Security
+
+- **PDA Wallets** - Funds controlled by smart contract, not private keys
+- **Operator Pattern** - Delegate trading without giving ownership
+- **Lock Periods** - Lock funds for trust (up to 5 years)
+- **On-chain Limits** - Max 50% per trade, slippage protection
+- **Rate Limiting** - Prevents rapid trade abuse
+
+---
+
+## 📊 Database Schema
+
+### Tables
+- `contract_wallets` - PDA wallet records
+- `tokens` - Created token metadata
+- `persistent_bots` - Bot configurations
+- `bot_logs` - Activity history
+
+---
+
+## 🔗 Smart Contract
+
+**Program ID**: `4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5`
+
+See the [contract documentation](https://github.com/DylanPort/MM-Whistle) for full details.
+
+---
+
+## 🛠️ Development
+
+### Requirements
+- Node.js 18+
+- npm or yarn
+
+### Running in Development
+
+```bash
+# Watch mode with auto-restart
+npm run dev
+
+# Or with PM2
+pm2 start ecosystem.config.cjs
+```
+
+---
 
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE)
 
+---
+
 ## 🔗 Links
 
+- **Smart Contract**: [github.com/DylanPort/MM-Whistle](https://github.com/DylanPort/MM-Whistle)
 - **Whistle Network**: [whistle.ninja](https://whistle.ninja)
-- **Main Repo**: [github.com/DylanPort/whistle](https://github.com/DylanPort/whistle)
 

@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MM.WHISTLE | Trustless Market Making</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-void: #030304;
+            --bg-deep: #070709;
+            --bg-surface: #0c0c0f;
+            --bg-elevated: #111115;
+            --bg-glass: rgba(15, 15, 20, 0.7);
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            --border-medium: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(201, 162, 39, 0.3);
+            --text-white: #f4f4f5;
+            --text-gray: #9898a0;
+            --text-muted: #5c5c65;
+            --gold: #c9a227;
+            --gold-light: #ddb93d;
+            --gold-dark: #8a7019;
+            --gold-glow: rgba(201, 162, 39, 0.4);
+            --emerald: #10b981;
+            --emerald-glow: rgba(16, 185, 129, 0.4);
+            --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: 0 20px 60px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(201, 162, 39, 0.1);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(1deg); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.4; filter: blur(60px); }
+            50% { opacity: 0.7; filter: blur(80px); }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        @keyframes reveal-up {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes border-dance {
+            0%, 100% { 
+                background-position: 0% 50%;
+            }
+            50% { 
+                background-position: 100% 50%;
+            }
+        }
+
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: var(--bg-void);
+            color: var(--text-white);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.5;
+        }
+
+        /* === ATMOSPHERIC BACKGROUND === */
+        .atmosphere {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .atmosphere::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -25%;
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(ellipse, var(--gold-glow) 0%, transparent 70%);
+            animation: pulse-glow 8s ease-in-out infinite;
+        }
+
+        .atmosphere::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            right: -20%;
+            width: 70%;
+            height: 70%;
+            background: radial-gradient(ellipse, var(--emerald-glow) 0%, transparent 70%);
+            animation: pulse-glow 10s ease-in-out infinite 2s;
+            opacity: 0.3;
+        }
+
+        /* Floating orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            animation: float 12s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            top: 20%;
+            left: 10%;
+            width: 300px;
+            height: 300px;
+            background: var(--gold);
+            opacity: 0.08;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            top: 60%;
+            right: 15%;
+            width: 250px;
+            height: 250px;
+            background: var(--emerald);
+            opacity: 0.06;
+            animation-delay: -4s;
+        }
+
+        .orb-3 {
+            bottom: 20%;
+            left: 30%;
+            width: 200px;
+            height: 200px;
+            background: #fff;
+            opacity: 0.03;
+            animation-delay: -8s;
+        }
+
+        /* Grid pattern overlay */
+        .grid-pattern {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+            mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+        }
+
+        /* === LAYOUT === */
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        /* === HEADER === */
+        header {
+            padding: 24px 0;
+            position: relative;
+        }
+
+        .header-glass {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: reveal-up 0.8s ease-out;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-mark {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 20px;
+            color: var(--bg-void);
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.4s ease;
+            box-shadow: 0 4px 20px rgba(201, 162, 39, 0.3);
+        }
+
+        .logo-mark::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(135deg, var(--gold-light), var(--gold-dark));
+            border-radius: 14px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .logo:hover .logo-mark {
+            transform: rotateY(15deg) rotateX(-5deg);
+        }
+
+        .logo:hover .logo-mark::before {
+            opacity: 1;
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text span {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 40px;
+        }
+
+        .stat-item {
+            text-align: right;
+            padding: 8px 20px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            transition: all 0.3s ease;
+        }
+
+        .stat-item:hover {
+            background: rgba(201, 162, 39, 0.05);
+            border-color: var(--border-glow);
+        }
+
+        .stat-value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--text-white) 0%, var(--text-gray) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .btn-launch {
+            position: relative;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+            color: var(--bg-void);
+            border: none;
+            padding: 14px 32px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-launch::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .btn-launch:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(201, 162, 39, 0.4);
+        }
+
+        .btn-launch:hover::before {
+            opacity: 1;
+        }
+
+        .btn-launch span {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* === HERO === */
+        .hero {
+            padding: 100px 0 80px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-medium);
+            padding: 10px 20px;
+            border-radius: 100px;
+            margin-bottom: 32px;
+            font-size: 13px;
+            color: var(--text-gray);
+            animation: reveal-up 0.6s ease-out;
+        }
+
+        .hero-badge .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--emerald);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--emerald);
+            animation: pulse-glow 2s infinite;
+        }
+
+        .hero h1 {
+            font-size: clamp(48px, 8vw, 80px);
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            animation: reveal-up 0.8s ease-out 0.1s both;
+        }
+
+        .hero h1 .highlight {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s linear infinite;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: var(--text-gray);
+            max-width: 580px;
+            margin: 0 auto;
+            line-height: 1.7;
+            animation: reveal-up 0.8s ease-out 0.2s both;
+        }
+
+        /* === FILTERS === */
+        .filters-section {
+            padding: 20px 0 40px;
+            animation: reveal-up 0.8s ease-out 0.3s both;
+        }
+
+        .filters-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 6px;
+            background: var(--bg-elevated);
+            border-radius: 14px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .filter-tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .filter-tab::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+            border-radius: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .filter-tab.active {
+            color: var(--bg-void);
+        }
+
+        .filter-tab.active::before {
+            opacity: 1;
+        }
+
+        .filter-tab span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .filter-tab:hover:not(.active) {
+            color: var(--text-white);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            padding: 12px 20px;
+            border-radius: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.1);
+        }
+
+        .search-icon {
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        .search-box input {
+            background: transparent;
+            border: none;
+            color: var(--text-white);
+            font-family: inherit;
+            font-size: 14px;
+            width: 220px;
+            outline: none;
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* === TOKEN GRID === */
+        .token-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 24px;
+            padding-bottom: 100px;
+            min-height: 300px;
+        }
+
+        /* === TOKEN CARD === */
+        .token-card {
+            position: relative;
+            background: var(--bg-surface);
+            border-radius: 20px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+            perspective: 1000px;
+            overflow: hidden;
+        }
+
+        /* Animated border */
+        .token-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            padding: 1px;
+            background: linear-gradient(135deg, 
+                var(--border-subtle) 0%, 
+                var(--border-medium) 25%, 
+                var(--border-subtle) 50%,
+                var(--border-medium) 75%,
+                var(--border-subtle) 100%
+            );
+            background-size: 300% 300%;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: border-dance 6s ease infinite;
+        }
+
+        /* Glow effect */
+        .token-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(180deg, rgba(201, 162, 39, 0.08) 0%, transparent 100%);
+            border-radius: 20px 20px 0 0;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .token-card:hover {
+            transform: translateY(-8px) rotateX(2deg);
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .token-card:hover::before {
+            background: linear-gradient(135deg, 
+                var(--gold) 0%, 
+                var(--gold-dark) 25%, 
+                var(--gold) 50%,
+                var(--gold-dark) 75%,
+                var(--gold) 100%
+            );
+            background-size: 300% 300%;
+        }
+
+        .token-card:hover::after {
+            opacity: 1;
+        }
+
+        /* TOKEN VIEW CARD */
+        .token-card.token-view {
+            background: linear-gradient(145deg, var(--bg-surface) 0%, var(--bg-elevated) 100%);
+        }
+
+        .token-image-banner {
+            width: calc(100% + 48px);
+            height: 140px;
+            margin: -24px -24px 20px -24px;
+            border-radius: 20px 20px 0 0;
+            overflow: hidden;
+            position: relative;
+            background: var(--bg-deep);
+        }
+
+        .token-image-banner::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 50%, var(--bg-surface) 100%);
+            z-index: 1;
+        }
+
+        .token-image-banner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.6s ease;
+        }
+
+        .token-card:hover .token-image-banner img {
+            transform: scale(1.05);
+        }
+
+        .token-image-banner .fallback-symbol {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--gold);
+            opacity: 0.3;
+        }
+
+        .token-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .token-info-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .token-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-medium);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--gold);
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .token-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .token-card:hover .token-icon {
+            border-color: var(--gold);
+            box-shadow: 0 0 20px rgba(201, 162, 39, 0.2);
+        }
+
+        .token-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-white);
+            margin-bottom: 4px;
+        }
+
+        .token-symbol {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .token-badges {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .lock-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .lock-badge.locked {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--emerald);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .lock-badge.unlocked {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .lock-icon {
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .bot-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .bot-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .bot-dot.active {
+            background: var(--emerald);
+            box-shadow: 0 0 10px var(--emerald);
+        }
+
+        .bot-dot.inactive {
+            background: var(--text-muted);
+        }
+
+        /* Contract Address */
+        .ca-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 2;
+        }
+
+        .ca-row:hover {
+            background: rgba(201, 162, 39, 0.1);
+        }
+
+        .ca-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--gold);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .ca-value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-gray);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ca-copy {
+            font-size: 14px;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+
+        .ca-row:hover .ca-copy {
+            opacity: 1;
+        }
+
+        /* Mini Chart */
+        .chart-container {
+            height: 50px;
+            margin: 12px 0;
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .chart-container svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .chart-line {
+            fill: none;
+            stroke: var(--gold);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .chart-area {
+            fill: url(#goldGradient);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            padding: 16px 0;
+            border-top: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--border-subtle);
+            margin: 16px 0;
+        }
+
+        .stat-block {
+            text-align: center;
+            padding: 8px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.3s;
+        }
+
+        .stat-block:hover {
+            background: rgba(201, 162, 39, 0.05);
+        }
+
+        .stat-block .value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-white);
+            margin-bottom: 4px;
+        }
+
+        .stat-block .label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        /* Card Footer */
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .vault-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .vault-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .vault-value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--text-gray);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-gray);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: var(--bg-void);
+            transform: translateY(-2px);
+        }
+
+        /* === PDA VIEW CARD === */
+        .token-card.pda-view {
+            background: linear-gradient(145deg, rgba(15, 15, 20, 0.9) 0%, rgba(10, 10, 14, 0.95) 100%);
+        }
+
+        .pda-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .pda-address-block {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .pda-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+        }
+
+        .pda-address {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            color: var(--text-white);
+            font-weight: 500;
+        }
+
+        .creator-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 16px;
+        }
+
+        .creator-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .creator-value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--gold);
+        }
+
+        .pda-token-section {
+            background: rgba(201, 162, 39, 0.05);
+            border: 1px solid rgba(201, 162, 39, 0.15);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .pda-token-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+        }
+
+        .pda-token-row .label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .pda-token-row .value {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-white);
+        }
+
+        .pda-token-row .value.mono {
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .pda-token-row .value.gold {
+            color: var(--gold);
+            font-weight: 600;
+        }
+
+        .pda-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 13px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border: 1px dashed var(--border-medium);
+            margin-bottom: 16px;
+        }
+
+        /* === LOADING STATE === */
+        .loading-card {
+            background: var(--bg-surface);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, 
+                var(--bg-elevated) 0%, 
+                var(--bg-deep) 50%, 
+                var(--bg-elevated) 100%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        /* === FOOTER === */
+        footer {
+            border-top: 1px solid var(--border-subtle);
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .footer-content {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .footer-content a {
+            color: var(--text-gray);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-content a:hover {
+            color: var(--gold);
+        }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 1024px) {
+            .header-stats {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 16px;
+            }
+
+            .hero h1 {
+                font-size: 36px;
+                letter-spacing: -1px;
+            }
+
+            .filters-wrapper {
+                flex-direction: column;
+            }
+
+            .filter-tabs {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+
+            .search-box input {
+                width: 100%;
+            }
+
+            .token-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* === STAGGERED ANIMATIONS === */
+        .token-card {
+            animation: reveal-up 0.6s ease-out both;
+        }
+
+        .token-card:nth-child(1) { animation-delay: 0.1s; }
+        .token-card:nth-child(2) { animation-delay: 0.15s; }
+        .token-card:nth-child(3) { animation-delay: 0.2s; }
+        .token-card:nth-child(4) { animation-delay: 0.25s; }
+        .token-card:nth-child(5) { animation-delay: 0.3s; }
+        .token-card:nth-child(6) { animation-delay: 0.35s; }
+        .token-card:nth-child(7) { animation-delay: 0.4s; }
+        .token-card:nth-child(8) { animation-delay: 0.45s; }
+        .token-card:nth-child(9) { animation-delay: 0.5s; }
+
+        /* === TOAST === */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-elevated);
+            border: 1px solid var(--gold);
+            color: var(--text-white);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 13px;
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Atmospheric Background -->
+    <div class="atmosphere">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    <div class="grid-pattern"></div>
+
+    <div class="container">
+        <header>
+            <div class="header-glass">
+                <div class="logo">
+                    <div class="logo-mark">W</div>
+                    <div class="logo-text">MM.<span>WHISTLE</span></div>
+                </div>
+
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalWallets">-</div>
+                        <div class="stat-label">Trustless Wallets</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalLocked">-</div>
+                        <div class="stat-label">Total Locked</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="lockedPDAs">-</div>
+                        <div class="stat-label">Locked PDAs</div>
+                    </div>
+                </div>
+
+                <a href="index.html" class="btn-launch">
+                    <span>Launch App</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="hero-badge">
+                <span class="pulse-dot"></span>
+                <span>All locks verified on-chain</span>
+            </div>
+            <h1>Trustless <span class="highlight">Market Making</span></h1>
+            <p>Transparent, verifiable liquidity provision. Every token displayed has developer funds locked in a smart contract.</p>
+        </section>
+
+        <div class="filters-section">
+            <div class="filters-wrapper">
+                <div class="filter-tabs">
+                    <button class="filter-tab active" onclick="filterTokens('tokens')"><span>Tokens</span></button>
+                    <button class="filter-tab" onclick="filterTokens('pdas')"><span>All PDAs</span></button>
+                    <button class="filter-tab" onclick="filterTokens('locked')"><span>Locked</span></button>
+                    <button class="filter-tab" onclick="filterTokens('active')"><span>Active Bots</span></button>
+                </div>
+                <div class="search-container">
+                    <div class="search-box">
+                        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input type="text" placeholder="Search by name or address..." id="searchInput" oninput="searchTokens()">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="token-grid" id="tokenGrid">
+            <!-- Dynamically loaded -->
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                Built by <a href="https://whistle.ninja" target="_blank">Whistle</a> · Powered by Solana
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- SVG Definitions -->
+    <svg width="0" height="0">
+        <defs>
+            <linearGradient id="goldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:rgba(201, 162, 39, 0.4)"/>
+                <stop offset="100%" style="stop-color:rgba(201, 162, 39, 0)"/>
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <script>
+        let allTokens = [];
+        let currentFilter = 'tokens';
+
+        async function loadTokens() {
+            const grid = document.getElementById('tokenGrid');
+            
+            // Loading skeletons
+            grid.innerHTML = Array(6).fill(0).map(() => `
+                <div class="loading-card">
+                    <div style="display: flex; gap: 14px; margin-bottom: 20px;">
+                        <div class="skeleton" style="width: 52px; height: 52px; border-radius: 14px;"></div>
+                        <div style="flex: 1;">
+                            <div class="skeleton" style="width: 120px; height: 18px; margin-bottom: 8px;"></div>
+                            <div class="skeleton" style="width: 60px; height: 14px;"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton" style="height: 50px; margin: 16px 0;"></div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div class="skeleton" style="height: 50px;"></div>
+                        <div class="skeleton" style="height: 50px;"></div>
+                        <div class="skeleton" style="height: 50px;"></div>
+                    </div>
+                </div>
+            `).join('');
+
+            try {
+                const r = await fetch('/api/landing/tokens');
+                if (!r.ok) throw new Error('Failed to fetch');
+                allTokens = await r.json();
+                updateHeaderStats();
+                filterTokens(currentFilter);
+            } catch (e) {
+                console.error('Failed to load:', e);
+                allTokens = [];
+                updateHeaderStats();
+                filterTokens(currentFilter);
+            }
+        }
+
+        function updateHeaderStats() {
+            const locked = allTokens.filter(t => t.isLocked).length;
+            const totalSOL = allTokens.reduce((sum, t) => sum + (t.lockedSOL || 0), 0);
+            
+            document.getElementById('totalWallets').textContent = allTokens.length;
+            document.getElementById('totalLocked').textContent = formatLargeNumber(totalSOL) + ' SOL';
+            document.getElementById('lockedPDAs').textContent = locked;
+        }
+
+        function renderTokens(tokens, filterType = 'pdas') {
+            const grid = document.getElementById('tokenGrid');
+            
+            if (allTokens.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 100px 20px;">
+                        <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.3;">◈</div>
+                        <h3 style="font-size: 24px; margin-bottom: 12px; color: var(--text-white);">No trustless wallets yet</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 24px;">Create a trustless wallet with a time lock to appear here.</p>
+                        <a href="index.html" class="btn-launch"><span>Launch App</span></a>
+                    </div>
+                `;
+                return;
+            }
+
+            if (tokens.length === 0) {
+                const msg = filterType === 'tokens' ? 'No tokens created yet' :
+                           filterType === 'active' ? 'No active bots' : 'No results';
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: var(--text-muted);">
+                        <div style="font-size: 32px; margin-bottom: 16px; opacity: 0.3;">∅</div>
+                        ${msg}
+                    </div>
+                `;
+                return;
+            }
+
+            const isTokensView = filterType === 'tokens';
+
+            grid.innerHTML = tokens.map(wallet => {
+                const hasToken = wallet.mint && wallet.mint.length > 30;
+                
+                if (isTokensView && hasToken) {
+                    const imageUrl = wallet.image || '';
+                    const hasImage = imageUrl && imageUrl.length > 10;
+                    const symbol = (wallet.symbol || '??').slice(0, 2).toUpperCase();
+
+                    return `
+                    <div class="token-card token-view" onclick="viewToken('${wallet.mint}')">
+                        <div class="token-image-banner">
+                            ${hasImage ? `<img src="${imageUrl}" alt="${wallet.symbol}" loading="lazy" onerror="this.style.display='none'">` : ''}
+                            <span class="fallback-symbol">${symbol}</span>
+                        </div>
+
+                        <div class="token-header">
+                            <div class="token-info-group">
+                                <div>
+                                    <div class="token-name">${escapeHtml(wallet.name || 'Token')}</div>
+                                    <span class="token-symbol">${escapeHtml(wallet.symbol || '???')}</span>
+                                </div>
+                            </div>
+                            <div class="token-badges">
+                                <div class="lock-badge ${wallet.isLocked ? 'locked' : 'unlocked'}">
+                                    <span class="lock-icon">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            ${wallet.isLocked ? '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' : '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>'}
+                                        </svg>
+                                    </span>
+                                    ${wallet.isLocked ? wallet.lockDays + 'd' : 'OPEN'}
+                                </div>
+                                <div class="bot-indicator">
+                                    <span class="bot-dot ${wallet.botActive ? 'active' : 'inactive'}"></span>
+                                    ${wallet.botActive ? 'MM Active' : 'MM Off'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ca-row" onclick="event.stopPropagation(); copyAddress('${wallet.mint}')">
+                            <span class="ca-label">CA</span>
+                            <span class="ca-value">${wallet.mint}</span>
+                            <span class="ca-copy">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            </span>
+                        </div>
+
+                        <div class="chart-container">${generateChart(wallet.priceHistory)}</div>
+
+                        <div class="stats-grid">
+                            <div class="stat-block">
+                                <div class="value">$${formatLargeNumber(wallet.marketCap || 0)}</div>
+                                <div class="label">Market Cap</div>
+                            </div>
+                            <div class="stat-block">
+                                <div class="value">${wallet.price ? '$' + formatPrice(wallet.price) : '-'}</div>
+                                <div class="label">Price</div>
+                            </div>
+                            <div class="stat-block">
+                                <div class="value">$${formatLargeNumber(wallet.liquidity || 0)}</div>
+                                <div class="label">Liquidity</div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="vault-info">
+                                <span class="vault-label">Vault: ${formatLargeNumber(wallet.lockedSOL || 0)} SOL</span>
+                                <span class="vault-value">${wallet.vaultAddress?.slice(0,6)}...${wallet.vaultAddress?.slice(-4)}</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="event.stopPropagation(); copyAddress('${wallet.mint}')" title="Copy">⧉</button>
+                                <button class="action-btn" onclick="event.stopPropagation(); openExplorer('${wallet.mint}')" title="Explorer">↗</button>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
+
+                // PDA View
+                return `
+                <div class="token-card pda-view" onclick="${hasToken ? `viewToken('${wallet.mint}')` : ''}">
+                    <div class="pda-header">
+                        <div class="pda-address-block">
+                            <span class="pda-label">Vault PDA</span>
+                            <span class="pda-address">${wallet.vaultAddress?.slice(0,8)}...${wallet.vaultAddress?.slice(-6)}</span>
+                        </div>
+                        <div class="lock-badge ${wallet.isLocked ? 'locked' : 'unlocked'}">
+                            <span class="lock-icon">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    ${wallet.isLocked ? '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' : '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>'}
+                                </svg>
+                            </span>
+                            ${wallet.isLocked ? 'LOCKED' : 'OPEN'}
+                        </div>
+                    </div>
+
+                    <div class="creator-row">
+                        <span class="creator-label">Creator</span>
+                        <span class="creator-value">${wallet.ownerWallet?.slice(0,6)}...${wallet.ownerWallet?.slice(-4)}</span>
+                    </div>
+
+                    ${hasToken ? `
+                        <div class="pda-token-section">
+                            <div class="pda-token-row">
+                                <span class="label">Token</span>
+                                <span class="value mono">${wallet.mint.slice(0,6)}...${wallet.mint.slice(-4)}</span>
+                            </div>
+                            <div class="pda-token-row">
+                                <span class="label">Market Cap</span>
+                                <span class="value gold">$${formatLargeNumber(wallet.marketCap || 0)}</span>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="pda-empty">
+                            ${wallet.isCreator ? 'Token on-chain' : 'No token created'}
+                        </div>
+                    `}
+
+                    <div class="stats-grid">
+                        <div class="stat-block">
+                            <div class="value">${formatLargeNumber(wallet.lockedSOL || 0)}</div>
+                            <div class="label">SOL in Vault</div>
+                        </div>
+                        <div class="stat-block">
+                            <div class="value">${wallet.lockDays || 0}d</div>
+                            <div class="label">Lock Days</div>
+                        </div>
+                        <div class="stat-block">
+                            <div class="value">${wallet.lockRemaining || '-'}</div>
+                            <div class="label">Time Left</div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer">
+                        <div class="vault-info">
+                            <span class="vault-label">Vault PDA</span>
+                            <span class="vault-value">${wallet.vaultAddress?.slice(0,6)}...${wallet.vaultAddress?.slice(-4)}</span>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="action-btn" onclick="event.stopPropagation(); copyAddress('${wallet.vaultAddress}')" title="Copy Vault">◎</button>
+                            ${hasToken ? `<button class="action-btn" onclick="event.stopPropagation(); copyAddress('${wallet.mint}')" title="Copy Token">⧉</button>` : ''}
+                            <button class="action-btn" onclick="event.stopPropagation(); openExplorer('${wallet.vaultAddress}')" title="Explorer">↗</button>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function generateChart(priceHistory) {
+            if (!priceHistory || priceHistory.length < 2) {
+                priceHistory = Array(24).fill(0).map((_, i) => ({
+                    price: 100 + Math.sin(i * 0.4) * 25 + Math.random() * 15
+                }));
+            }
+
+            const prices = priceHistory.map(p => p.price || p);
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            const range = max - min || 1;
+            const w = 300, h = 50, pad = 4;
+
+            const pts = prices.map((p, i) => {
+                const x = (i / (prices.length - 1)) * w;
+                const y = h - pad - ((p - min) / range) * (h - pad * 2);
+                return `${x},${y}`;
+            });
+
+            return `
+                <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+                    <path class="chart-area" d="M0,${h} L${pts.join(' L')} L${w},${h} Z"/>
+                    <path class="chart-line" d="M${pts.join(' L')}"/>
+                </svg>
+            `;
+        }
+
+        function filterTokens(filter) {
+            currentFilter = filter;
+
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                const t = tab.textContent.toLowerCase();
+                const active = (filter === 'tokens' && t.includes('token')) ||
+                              (filter === 'pdas' && t.includes('pda')) ||
+                              (filter === 'locked' && t === 'locked') ||
+                              (filter === 'active' && t.includes('active'));
+                tab.classList.toggle('active', active);
+            });
+
+            let filtered = allTokens;
+            
+            if (filter === 'tokens') {
+                filtered = allTokens.filter(t => t.mint && t.mint.length > 30);
+            } else if (filter === 'locked') {
+                filtered = allTokens.filter(t => t.isLocked);
+            } else if (filter === 'active') {
+                filtered = allTokens.filter(t => t.botActive);
+            }
+
+            renderTokens(filtered, filter);
+        }
+
+        function searchTokens() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            if (!q) { filterTokens(currentFilter); return; }
+
+            const filtered = allTokens.filter(t =>
+                t.name?.toLowerCase().includes(q) ||
+                t.symbol?.toLowerCase().includes(q) ||
+                t.mint?.toLowerCase().includes(q) ||
+                t.vaultAddress?.toLowerCase().includes(q)
+            );
+            renderTokens(filtered, currentFilter);
+        }
+
+        function viewToken(mint) {
+            window.location.href = `index.html?token=${mint}`;
+        }
+
+        function copyAddress(addr) {
+            navigator.clipboard.writeText(addr);
+            showToast('Copied to clipboard');
+        }
+
+        function openExplorer(addr) {
+            window.open(`https://solscan.io/account/${addr}`, '_blank');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        function formatLargeNumber(n) {
+            if (!n || n === 0) return '0';
+            if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+            if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+            return n.toFixed(2);
+        }
+
+        function formatPrice(p) {
+            if (!p || p === 0) return '0';
+            if (p < 1e-8) return p.toExponential(2);
+            if (p < 1e-4) return p.toFixed(8);
+            if (p < 0.01) return p.toFixed(6);
+            if (p < 1) return p.toFixed(4);
+            return p.toFixed(2);
+        }
+
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        // Init
+        loadTokens();
+        setInterval(loadTokens, 30000);
+    </script>
+</body>
+</html>

@@ -1,24 +1,25 @@
-# Build artifacts
-target/
-.anchor/
-
 # Dependencies
 node_modules/
 
+# Database files (contain sensitive data)
+*.db
+
+# Logs
+logs/
+*.log
+
+# Environment variables (contains private keys)
+.env
+
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Secrets
-*-keypair.json
-playground-wallet.json
-
-# Logs
-*.log
+# Build artifacts
+dist/
+build/
 
