@@ -1,7 +1,8 @@
 /**
  * Smart Contract Client for MM Wallet Program v2
  * 
- * Program ID: 4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5
+ * Matches the deployed contract at: 4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5
+ * IDL from: C:\Users\salva\Downloads\server\mm-bot\mm\idl.json
  */
 
 import { 

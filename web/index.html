@@ -3,29 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MM.WHISTLE - Professional Solana Market Maker</title>
-    <meta name="description" content="Professional market making tools for Solana tokens. Create, manage, and automate trading strategies on pump.fun and Raydium.">
-    <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://mm.whistle.ninja/main">
-    
-    <!-- Favicon & Manifest -->
-    <link rel="icon" type="image/png" href="/logo.png">
-    <link rel="apple-touch-icon" href="/logo.png">
-    <link rel="manifest" href="/manifest.json">
-    
-    <!-- Open Graph / Social -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://mm.whistle.ninja/">
-    <meta property="og:title" content="MM.WHISTLE - Professional Solana Market Maker">
-    <meta property="og:description" content="Professional market making tools for Solana tokens. Create, manage, and automate trading strategies.">
-    <meta property="og:image" content="https://mm.whistle.ninja/logo.png">
-    
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="MM.WHISTLE - Professional Solana Market Maker">
-    <meta name="twitter:description" content="Professional market making tools for Solana tokens.">
-    <meta name="twitter:image" content="https://mm.whistle.ninja/logo.png">
-    
+    <title>MM.WHISTLE - Market Maker</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="https://unpkg.com/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
@@ -180,6 +158,12 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            text-decoration: none;
+            color: inherit;
+            transition: opacity 0.2s;
+        }
+        .logo:hover {
+            opacity: 0.8;
         }
         .logo img {
             height: 36px;
@@ -1002,66 +986,6 @@
             gap: 10px;
         }
 
-        /* Progress Modal */
-        .progress-modal {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-medium);
-            border-radius: 20px;
-            max-width: 450px;
-            width: 90%;
-            padding: 32px;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
-            text-align: center;
-        }
-        .progress-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--gold);
-            margin-bottom: 8px;
-        }
-        .progress-emoji {
-            font-size: 48px;
-            margin-bottom: 16px;
-            animation: bounce 1s ease-in-out infinite;
-        }
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-        .progress-message {
-            font-size: 14px;
-            color: var(--text-gray);
-            margin-bottom: 20px;
-            min-height: 40px;
-            transition: opacity 0.3s;
-        }
-        .progress-bar-container {
-            background: var(--bg-input);
-            border-radius: 10px;
-            height: 12px;
-            overflow: hidden;
-            margin-bottom: 16px;
-        }
-        .progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, var(--gold), var(--emerald));
-            border-radius: 10px;
-            transition: width 0.5s ease-out;
-            animation: shimmer 2s infinite;
-        }
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-        .progress-bar {
-            background: linear-gradient(90deg, var(--gold), var(--emerald), var(--gold));
-            background-size: 200% 100%;
-        }
-        .progress-step {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
         /* Warning box */
         .warning {
             background: rgba(201, 162, 39, 0.1);
@@ -1492,10 +1416,10 @@
     <div class="grid-pattern"></div>
 
     <header>
-        <div class="logo">
+        <a href="landing.html" class="logo">
             <img src="logo.png" alt="MM Whistle">
             <span class="mm">MM</span><span class="whistle">.WHISTLE</span>
-        </div>
+        </a>
         <div style="display: flex; align-items: center; gap: 16px;">
             <a href="https://github.com/DylanPort/MM-Whistle" target="_blank" class="github-btn">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1806,6 +1730,14 @@
                     <label>Initial Buy (SOL) - Optional</label>
                     <input type="number" id="initBuy" value="0" step="0.01" min="0">
                     <button class="btn btn-primary btn-block" id="btnCreateToken" onclick="createToken()">Create Token on Pump.fun</button>
+                    
+                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #3d3d3d;">
+                        <label>Or Use Existing Token Mint</label>
+                        <div class="copy-row">
+                            <input type="text" id="existingMint" placeholder="Token mint address...">
+                            <button class="btn btn-secondary" onclick="useExisting()">Use</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2015,19 +1947,6 @@
         </div>
     </div>
 
-    <!-- Progress Modal -->
-    <div class="modal-overlay hidden" id="progressOverlay">
-        <div class="progress-modal">
-            <div class="progress-emoji" id="progressEmoji">🚀</div>
-            <div class="progress-title" id="progressTitle">Creating Magic...</div>
-            <div class="progress-message" id="progressMessage">Preparing your trustless wallet...</div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar" style="width: 0%"></div>
-            </div>
-            <div class="progress-step" id="progressStep">Step 1 of 4</div>
-        </div>
-    </div>
-
     <!-- Auth Required Overlay - shown when not connected -->
     <div class="auth-required" id="authOverlay">
         <h2>Connect Your Wallet</h2>
@@ -2180,9 +2099,6 @@
                 const resp = await provider.connect();
                 const pubkey = resp.publicKey.toString();
                 
-                // Check if owner changed - clear stale PDA data if so
-                checkOwnerChanged(pubkey);
-                
                 // Store connection info
                 S.ownerWallet = pubkey;
                 connectedProvider = provider;
@@ -2222,20 +2138,13 @@
                 }
             } catch (e) {}
             
-            // Clear ALL state when disconnecting
             S.ownerWallet = null;
             S.walletId = null;
             S.walletAddr = null;
             S.tokenMint = null;
-            S.contractWallet = null;
-            S.contractInfo = null;
-            S.walletType = null;
-            S.walletBalance = 0;
             connectedProvider = null;
             connectedWalletId = null;
-            
-            // Clear localStorage completely
-            localStorage.removeItem('pumpMM_state');
+            saveState();
             localStorage.removeItem('lastWalletId');
             
             // Update UI
@@ -2320,41 +2229,20 @@
                 const saved = localStorage.getItem('pumpMM_state');
                 if (saved) {
                     const data = JSON.parse(saved);
-                    // Save the old owner to check if it changed
-                    const savedOwner = data.ownerWallet;
-                    
                     if (data.ownerWallet) S.ownerWallet = data.ownerWallet;
                     if (data.walletId) S.walletId = data.walletId;
                     if (data.walletAddr) S.walletAddr = data.walletAddr;
                     if (data.tokenMint) S.tokenMint = data.tokenMint;
                     if (data.strategy) S.strategy = data.strategy;
-                    // Trustless wallet state - only if same owner
+                    // Trustless wallet state
                     if (data.walletType) S.walletType = data.walletType;
                     if (data.contractWallet) S.contractWallet = data.contractWallet;
                     if (data.lockDays !== undefined) S.lockDays = data.lockDays;
-                    
-                    // Store savedOwner for comparison after wallet connect
-                    S._savedOwner = savedOwner;
-                    
                     console.log('[State] Loaded:', S);
                 }
             } catch (e) {
                 console.error('[State] Load error:', e);
             }
-        }
-        
-        // Check if wallet owner changed and clear stale data
-        function checkOwnerChanged(newOwner) {
-            if (S._savedOwner && S._savedOwner !== newOwner) {
-                console.log(`[State] Owner changed from ${S._savedOwner.slice(0,8)} to ${newOwner.slice(0,8)}, clearing PDA data`);
-                S.contractWallet = null;
-                S.contractInfo = null;
-                S.walletAddr = null;
-                S.walletId = null;
-                S.tokenMint = null;
-                S.walletBalance = 0;
-            }
-            S._savedOwner = null;
         }
 
         // Save state to localStorage
@@ -2420,86 +2308,6 @@
             showModal('Warning', msg, 'warning');
         }
 
-        // =====================================================================
-        // PROGRESS MODAL WITH FUNNY MESSAGES
-        // =====================================================================
-        
-        const WALLET_MESSAGES = [
-            { emoji: '🔧', text: 'Warming up the blockchain engines...' },
-            { emoji: '🏗️', text: 'Building your fortress of trustlessness...' },
-            { emoji: '🔐', text: 'Adding extra locks (for your peace of mind)...' },
-            { emoji: '🧙‍♂️', text: 'Consulting the Solana wizards...' },
-            { emoji: '⛏️', text: 'Mining some PDA addresses...' },
-            { emoji: '🎰', text: 'Rolling for good luck...' },
-            { emoji: '🤖', text: 'Teaching robots to trade for you...' },
-            { emoji: '💫', text: 'Sprinkling some crypto magic...' },
-            { emoji: '🔮', text: 'Predicting a bullish future...' },
-            { emoji: '🚀', text: 'Fueling up the rocket...' },
-            { emoji: '🏎️', text: 'Putting on racing tires...' },
-            { emoji: '🧪', text: 'Testing for maximum gains...' },
-            { emoji: '📡', text: 'Broadcasting to the validators...' },
-            { emoji: '⚡', text: 'Charging up the transaction...' },
-            { emoji: '🎯', text: 'Aiming for the moon...' },
-        ];
-        
-        const TOKEN_MESSAGES = [
-            { emoji: '🎨', text: 'Painting your token beautiful...' },
-            { emoji: '📸', text: 'Uploading your masterpiece to IPFS...' },
-            { emoji: '🪙', text: 'Minting fresh tokens straight from the oven...' },
-            { emoji: '🎭', text: 'Giving your token a personality...' },
-            { emoji: '🌟', text: 'Adding some star power...' },
-            { emoji: '🎪', text: 'Setting up the bonding curve circus...' },
-            { emoji: '💎', text: 'Polishing the diamond hands...' },
-            { emoji: '🦄', text: 'Summoning the pump.fun unicorn...' },
-            { emoji: '🎵', text: 'Composing the WAGMI symphony...' },
-            { emoji: '🏆', text: 'Preparing for the hall of fame...' },
-            { emoji: '🌈', text: 'Connecting to the rainbow bridge...' },
-            { emoji: '🎁', text: 'Wrapping up your gift to the world...' },
-            { emoji: '🔥', text: 'Making it absolutely fire...' },
-            { emoji: '💰', text: 'Loading up the treasure chest...' },
-            { emoji: '🚀', text: 'T-minus 10 seconds to launch...' },
-        ];
-        
-        let progressInterval = null;
-        let messageIndex = 0;
-        let currentMessages = WALLET_MESSAGES;
-        
-        function showProgress(title, type = 'wallet') {
-            currentMessages = type === 'token' ? TOKEN_MESSAGES : WALLET_MESSAGES;
-            messageIndex = 0;
-            
-            document.getElementById('progressTitle').textContent = title;
-            document.getElementById('progressBar').style.width = '5%';
-            document.getElementById('progressStep').textContent = 'Initializing...';
-            updateProgressMessage();
-            document.getElementById('progressOverlay').classList.remove('hidden');
-            
-            // Cycle through funny messages
-            progressInterval = setInterval(() => {
-                messageIndex = (messageIndex + 1) % currentMessages.length;
-                updateProgressMessage();
-            }, 2500);
-        }
-        
-        function updateProgressMessage() {
-            const msg = currentMessages[messageIndex];
-            document.getElementById('progressEmoji').textContent = msg.emoji;
-            document.getElementById('progressMessage').textContent = msg.text;
-        }
-        
-        function updateProgress(percent, step) {
-            document.getElementById('progressBar').style.width = percent + '%';
-            if (step) document.getElementById('progressStep').textContent = step;
-        }
-        
-        function hideProgress() {
-            if (progressInterval) {
-                clearInterval(progressInterval);
-                progressInterval = null;
-            }
-            document.getElementById('progressOverlay').classList.add('hidden');
-        }
-
         function setLoading(btnId, loading) {
             const btn = document.getElementById(btnId);
             if (loading) {
@@ -2527,59 +2335,7 @@
 
         function validateHasFunds(minRequired = 0.01) {
             if (S.walletBalance < minRequired) {
-                showError(`Insufficient vault balance. Your vault has ${S.walletBalance.toFixed(4)} SOL but needs at least ${minRequired} SOL.`);
-                return false;
-            }
-            return true;
-        }
-        
-        // Check CONNECTED wallet balance (for signing transactions)
-        let cachedConnectedBalance = { balance: 0, timestamp: 0, address: null };
-        async function getConnectedWalletBalance() {
-            if (!S.ownerWallet) {
-                console.log('[Balance] No owner wallet connected');
-                return 0;
-            }
-            
-            // Use cached balance if fresh (less than 5 seconds old) and same address
-            if (cachedConnectedBalance.address === S.ownerWallet && 
-                Date.now() - cachedConnectedBalance.timestamp < 5000) {
-                console.log('[Balance] Using cached balance:', cachedConnectedBalance.balance);
-                return cachedConnectedBalance.balance;
-            }
-            
-            try {
-                console.log('[Balance] Fetching balance for:', S.ownerWallet);
-                const connection = new solanaWeb3.Connection('https://rpc.whistle.ninja', 'confirmed');
-                const pubkey = new solanaWeb3.PublicKey(S.ownerWallet);
-                const lamports = await connection.getBalance(pubkey);
-                const balance = lamports / 1e9;
-                cachedConnectedBalance = { balance, timestamp: Date.now(), address: S.ownerWallet };
-                console.log('[Balance] Fetched connected wallet balance:', balance, 'SOL');
-                return balance;
-            } catch (e) {
-                console.error('[Balance] Failed to fetch connected wallet balance:', e);
-                // Try alternative RPC
-                try {
-                    const altConnection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-                    const pubkey = new solanaWeb3.PublicKey(S.ownerWallet);
-                    const lamports = await altConnection.getBalance(pubkey);
-                    const balance = lamports / 1e9;
-                    cachedConnectedBalance = { balance, timestamp: Date.now(), address: S.ownerWallet };
-                    console.log('[Balance] Fetched from alt RPC:', balance, 'SOL');
-                    return balance;
-                } catch (e2) {
-                    console.error('[Balance] Alt RPC also failed:', e2);
-                    return cachedConnectedBalance.balance || 0;
-                }
-            }
-        }
-        
-        // Validate connected wallet has enough SOL for transaction
-        async function validateConnectedWalletFunds(minRequired, actionName = 'this action') {
-            const balance = await getConnectedWalletBalance();
-            if (balance < minRequired) {
-                showError(`Insufficient SOL in your wallet!\n\nYou have: ${balance.toFixed(4)} SOL\nRequired: ${minRequired.toFixed(4)} SOL\n\nPlease add ${(minRequired - balance).toFixed(4)} SOL to your wallet for ${actionName}.`);
+                showError(`Insufficient balance. You have ${S.walletBalance.toFixed(4)} SOL but need at least ${minRequired} SOL.`);
                 return false;
             }
             return true;
@@ -2706,11 +2462,7 @@
         async function selectContractWallet(pdaAddress) {
             S.contractWallet = pdaAddress;
             S.walletAddr = pdaAddress;
-            S.tokenMint = null; // Clear token when switching wallets
             saveState();
-            
-            // Clear logs when switching wallets
-            clearLogs();
             
             // Update UI
             document.querySelectorAll('.contract-wallet-card').forEach(el => {
@@ -2723,15 +2475,7 @@
                 S.contractInfo = await res.json();
                 S.walletBalance = S.contractInfo.balanceSOL || 0;
                 
-                // Load token mint if wallet has one
-                if (S.contractInfo.tokenMint) {
-                    S.tokenMint = S.contractInfo.tokenMint;
-                    addLog(`Selected wallet with token: ${S.tokenMint.slice(0, 8)}...`, 'info');
-                } else {
-                    addLog(`Selected trustless wallet: ${pdaAddress.slice(0, 8)}...`, 'info');
-                }
-                
-                saveState();
+                addLog(`Selected trustless wallet: ${pdaAddress.slice(0, 8)}...`, 'info');
                 
                 // Update the Step 2 selector
                 refreshTrustlessSelect();
@@ -2754,23 +2498,13 @@
             S.contractWallet = pdaAddress;
             S.walletAddr = pdaAddress;
             S.walletType = 'trustless';
-            S.tokenMint = null; // Clear token when switching wallets
             saveState();
-            
-            // Clear logs when switching wallets
-            clearLogs();
             
             // Load wallet info
             try {
                 const res = await fetch(`/api/contract/wallets/${pdaAddress}?ownerWallet=${S.ownerWallet}`);
                 S.contractInfo = await res.json();
                 S.walletBalance = S.contractInfo.balanceSOL || 0;
-                
-                // Load token mint if wallet has one
-                if (S.contractInfo.tokenMint) {
-                    S.tokenMint = S.contractInfo.tokenMint;
-                }
-                saveState();
                 
                 // Update the UI
                 updateTrustlessUI();
@@ -2782,11 +2516,7 @@
                 // Fetch volume stats for this wallet
                 fetchVolumeStats();
                 
-                if (S.tokenMint) {
-                    addLog(`Selected wallet with token: ${S.tokenMint.slice(0, 8)}...`, 'info');
-                } else {
-                    addLog(`Selected wallet: ${pdaAddress.slice(0, 8)}...`, 'info');
-                }
+                addLog(`Selected wallet: ${pdaAddress.slice(0, 8)}...`, 'info');
             } catch (e) {
                 showError('Failed to load wallet info: ' + e.message);
             }
@@ -2824,7 +2554,22 @@
                     }
                 }
                 
-                // Balance is already fetched by refreshBal() - no need to duplicate
+                // ALSO fetch balance directly from dedicated endpoint
+                if (S.contractWallet) {
+                    try {
+                        const balRes = await fetch(`/api/contract/wallets/${S.contractWallet}/balance`);
+                        const balData = await balRes.json();
+                        if (balData.balanceSOL !== undefined) {
+                            const bal = balData.balanceSOL;
+                            S.walletBalance = bal;
+                            document.getElementById('mmBal').textContent = bal.toFixed(4) + ' SOL';
+                            document.getElementById('walletBal').textContent = bal.toFixed(4) + ' SOL';
+                            console.log('[Balance] Direct fetch: ' + bal.toFixed(4) + ' SOL');
+                        }
+                    } catch (balErr) {
+                        console.error('[Balance] Direct fetch error:', balErr);
+                    }
+                }
             } catch (e) {
                 console.error('[Stats] Fetch error:', e.message);
             }
@@ -3018,32 +2763,10 @@
                 return;
             }
             
-            // Check connected wallet has enough SOL (needs ~0.015 SOL for rent + fees)
-            const minRequired = 0.015;
-            if (!await validateConnectedWalletFunds(minRequired, 'creating a trustless wallet')) {
-                return;
-            }
-            
             setLoading('btnCreateContractWallet', true);
-            showProgress('Creating Trustless Wallet', 'wallet');
             
             try {
-                // Step 1: Get server's operator pubkey for auto-trading
-                updateProgress(10, 'Step 1/5: Setting up auto-trading...');
-                let operatorPubkey = null;
-                try {
-                    const opRes = await fetch('/api/persistent-bots/operator');
-                    const opData = await opRes.json();
-                    operatorPubkey = opData.operatorPublicKey;
-                    if (operatorPubkey) {
-                        addLog(`Server operator: ${operatorPubkey.slice(0, 8)}...`, 'info');
-                    }
-                } catch (e) {
-                    console.warn('Could not get operator pubkey:', e);
-                }
-                
-                // Step 2: Get unsigned transaction from server
-                updateProgress(20, 'Step 2/5: Preparing transaction...');
+                // Get unsigned transaction from server
                 const res = await fetch('/api/contract/wallets/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3056,8 +2779,7 @@
                             minDelaySecs: 30,
                             maxDelaySecs: 120,
                             slippageBps: 500
-                        },
-                        operator: operatorPubkey // Set server as operator for auto-trading!
+                        }
                     })
                 });
                 
@@ -3066,16 +2788,15 @@
                     throw new Error(data.error);
                 }
                 
-                // Step 3: Sign transaction
-                updateProgress(40, 'Step 3/5: Sign in your wallet...');
                 addLog(`Signing transaction to create wallet with ${S.lockDays}-day lock...`, 'info');
                 
+                // Decode and sign transaction
                 const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
-                const transaction = solanaWeb3.Transaction.from(txBuffer);
-                const signedTx = await connectedProvider.signTransaction(transaction);
+                const signedTx = await connectedProvider.signTransaction({
+                    serialize: () => txBuffer
+                });
                 
-                // Step 4: Submit to blockchain
-                updateProgress(60, 'Step 4/5: Broadcasting to Solana...');
+                // Submit signed transaction
                 const submitRes = await fetch('/api/contract/submit-tx', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3088,9 +2809,6 @@
                 if (submitData.error) {
                     throw new Error(submitData.error);
                 }
-                
-                // Step 5: Record and setup
-                updateProgress(85, 'Step 5/5: Finalizing...');
                 
                 // Record in database
                 await fetch('/api/contract/wallets/record', {
@@ -3113,11 +2831,16 @@
                 
                 addLog(`Trustless wallet created: ${data.pdaAddress.slice(0, 8)}...`, 'info');
                 
-                updateProgress(100, 'Wallet Created! 🎉');
-                hideProgress();
-                
-                // Show success - operator was set during creation so auto-trading is ready
-                showSuccess(`Trustless Wallet Created!\n\nPDA: ${data.pdaAddress.slice(0, 8)}...\nLock: ${S.lockDays} days\n\n✅ Auto-trading ENABLED!\n✅ Now fund your wallet and create a token!\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                // Now set up the operator for auto-trading
+                try {
+                    addLog(`Setting up operator for 24/7 trading...`, 'info');
+                    await setupOperator(data.pdaAddress);
+                    
+                    showSuccess(`Trustless Wallet Ready!\n\nPDA: ${data.pdaAddress.slice(0, 8)}...\nLock: ${S.lockDays} days\nAuto-Trading: ENABLED\n\nMM will run 24/7 on the server!\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                } catch (opErr) {
+                    console.warn('Operator setup failed:', opErr.message);
+                    showSuccess(`Trustless wallet created!\n\nPDA: ${data.pdaAddress.slice(0, 8)}...\nLock: ${S.lockDays} days\n\nNote: Auto-trading setup skipped.\n\nTX: ${submitData.signature.slice(0, 20)}...`);
+                }
                 
                 // Reload wallets and move to funding step
                 await loadContractWallets();
@@ -3125,7 +2848,6 @@
                 
             } catch (e) {
                 console.error('[Contract] Create wallet error:', e);
-                hideProgress();
                 showError('Failed to create trustless wallet: ' + e.message);
             } finally {
                 setLoading('btnCreateContractWallet', false);
@@ -3136,11 +2858,6 @@
         async function setupOperator(pdaAddress) {
             if (!S.ownerWallet || !connectedProvider) {
                 throw new Error('Wallet not connected');
-            }
-            
-            // Check connected wallet has enough SOL (needs ~0.005 SOL for fees)
-            if (!await validateConnectedWalletFunds(0.005, 'enabling auto-trading')) {
-                throw new Error('Insufficient SOL for transaction fees');
             }
             
             // Get setOperator transaction from server
@@ -3159,10 +2876,11 @@
             
             addLog(`Operator: ${data.operatorPubkey.slice(0, 8)}...`, 'info');
             
-            // Sign the setOperator transaction properly
+            // Sign the setOperator transaction
             const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
-            const transaction = solanaWeb3.Transaction.from(txBuffer);
-            const signedTx = await connectedProvider.signTransaction(transaction);
+            const signedTx = await connectedProvider.signTransaction({
+                serialize: () => txBuffer
+            });
             
             // Submit
             const submitRes = await fetch('/api/contract/submit-tx', {
@@ -3259,12 +2977,6 @@
                 return;
             }
             
-            // Check connected wallet has enough SOL (deposit amount + fees)
-            const minRequired = amount + 0.005;
-            if (!await validateConnectedWalletFunds(minRequired, `depositing ${amount} SOL`)) {
-                return;
-            }
-            
             try {
                 // Get unsigned transaction
                 const res = await fetch(`/api/contract/wallets/${S.contractWallet}/deposit`, {
@@ -3283,10 +2995,11 @@
                 
                 addLog(`Signing deposit of ${amount} SOL...`, 'info');
                 
-                // Sign with connected wallet properly
+                // Sign with connected wallet
                 const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
-                const transaction = solanaWeb3.Transaction.from(txBuffer);
-                const signedTx = await connectedProvider.signTransaction(transaction);
+                const signedTx = await connectedProvider.signTransaction({
+                    serialize: () => txBuffer
+                });
                 
                 // Submit
                 const submitRes = await fetch('/api/contract/submit-tx', {
@@ -3318,11 +3031,6 @@
         async function withdrawFromContract() {
             if (!S.contractWallet || !S.ownerWallet || !connectedProvider) {
                 showError('Please select a trustless wallet and connect your wallet');
-                return;
-            }
-            
-            // Check connected wallet has enough SOL for fees
-            if (!await validateConnectedWalletFunds(0.005, 'withdrawal transaction fees')) {
                 return;
             }
             
@@ -3375,10 +3083,10 @@
                 
                 addLog(`Signing withdrawal of ${amountNum} SOL...`, 'info');
                 
-                // Sign withdrawal transaction properly
                 const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
-                const transaction = solanaWeb3.Transaction.from(txBuffer);
-                const signedTx = await connectedProvider.signTransaction(transaction);
+                const signedTx = await connectedProvider.signTransaction({
+                    serialize: () => txBuffer
+                });
                 
                 const submitRes = await fetch('/api/contract/submit-tx', {
                     method: 'POST',
@@ -3472,28 +3180,24 @@
                     if (d.type === 'log') {
                         addLog(d.message, d.logType || 'info');
                     }
-                    // Handle bot-log messages from persistent bots - only show for selected token
+                    // Handle bot-log messages from persistent bots
                     if (d.type === 'bot-log') {
-                        // Filter: only show logs for the currently selected token
-                        if (S.tokenMint && d.tokenMint && d.tokenMint !== S.tokenMint) {
-                            return; // Skip logs for other tokens
-                        }
                         const levelClass = d.level === 'error' ? 'error' : 
                                           d.level === 'warn' ? 'warn' : 
                                           d.level === 'trade' ? 'buy' : 'info';
-                        addLog(d.message, levelClass);
+                        const prefix = d.tokenMint ? `[${d.tokenMint.slice(0,6)}]` : '';
+                        addLog(`${prefix} ${d.message}`, levelClass);
                     }
-                    // Handle recent-logs on reconnect (persistent logs) - only show for selected token
+                    // Handle recent-logs on reconnect (persistent logs)
                     if (d.type === 'recent-logs' && d.logs) {
-                        // Filter and load persistent logs (most recent last)
-                        d.logs
-                            .filter(log => !S.tokenMint || !log.tokenMint || log.tokenMint === S.tokenMint)
-                            .forEach(log => {
-                                const levelClass = log.level === 'error' ? 'error' : 
-                                                  log.level === 'warn' ? 'warn' : 
-                                                  log.level === 'trade' ? 'buy' : 'info';
-                                addLogWithTime(log.message, levelClass, log.timestamp);
-                            });
+                        // Load persistent logs (most recent last)
+                        d.logs.forEach(log => {
+                            const levelClass = log.level === 'error' ? 'error' : 
+                                              log.level === 'warn' ? 'warn' : 
+                                              log.level === 'trade' ? 'buy' : 'info';
+                            const prefix = log.tokenMint ? `[${log.tokenMint.slice(0,6)}]` : '';
+                            addLogWithTime(`${prefix} ${log.message}`, levelClass, log.timestamp);
+                        });
                     }
                     // Handle persistent bot status updates
                     if (d.type === 'persistent-bots') {
@@ -3550,12 +3254,6 @@
             const t = timestamp ? new Date(timestamp).toLocaleTimeString().slice(0, 5) : '--:--';
             // Add to bottom for historical logs (they come in chronological order)
             box.innerHTML += `<div class="log-item ${type}"><span class="log-time">${t}</span><span class="log-msg">${msg}</span></div>`;
-        }
-        
-        // Clear activity log (when switching tokens/wallets)
-        function clearLogs() {
-            const box = document.getElementById('logBox');
-            box.innerHTML = '';
         }
 
         // =====================================================================
@@ -3791,16 +3489,16 @@
         
         function startBalancePolling() {
             if (balancePollingInterval) return;
-            console.log('[Balance] Starting polling (every 5s)');
+            console.log('[Balance] Starting real-time polling (every 1s)');
             balancePollingInterval = setInterval(() => {
                 refreshBal(true); // silent refresh
-            }, 5000); // Poll every 5 seconds - less aggressive
+            }, 1000); // Poll every 1 second for real-time feel
             
-            // Also poll volume stats every 10 seconds
+            // Also poll volume stats every 3 seconds
             if (!volumePollingInterval) {
                 volumePollingInterval = setInterval(() => {
                     fetchVolumeStats();
-                }, 10000);
+                }, 3000);
             }
         }
         
@@ -4045,152 +3743,148 @@
                 throw new Error('Trustless wallet info not loaded. Please refresh the wallet in Step 2.');
             }
             
-            // Check connected wallet has enough SOL (needs ~0.025 SOL for token creation + fees)
-            if (!await validateConnectedWalletFunds(0.025, 'creating a token')) {
-                throw new Error('Insufficient SOL for token creation');
-            }
-            
             console.log('[Trustless] Creating token with wallet:', S.contractWallet);
             console.log('[Trustless] Wallet info:', S.contractInfo);
             
-            showProgress(`Launching ${symbol} 🚀`, 'token');
+            addLog(`Creating trustless token ${symbol}...`, 'info');
+            addLog('PDA will be the creator → fees go to vault!', 'info');
+            addLog(`Using wallet: ${S.contractWallet.slice(0,8)}...`, 'info');
             
-            try {
-                // Step 1: Upload metadata and get unsigned transaction
-                updateProgress(10, 'Step 1/4: Uploading to IPFS...');
-                addLog(`Creating trustless token ${symbol}...`, 'info');
-                addLog('PDA will be the creator → fees go to vault!', 'info');
-                addLog(`Using wallet: ${S.contractWallet.slice(0,8)}...`, 'info');
-                
-                const formData = new FormData();
-                formData.append('ownerWallet', S.ownerWallet);
-                formData.append('name', name);
-                formData.append('symbol', symbol);
-                formData.append('description', document.getElementById('tokenDesc').value.trim() || `${name} - the best meme token`);
-                formData.append('twitter', document.getElementById('tokenTwitter').value.trim());
-                formData.append('telegram', document.getElementById('tokenTelegram').value.trim());
-                formData.append('website', document.getElementById('tokenWebsite')?.value?.trim() || '');
-                formData.append('image', document.getElementById('tokenImage').files[0]);
-                
-                const r = await fetch(`/api/contract/wallets/${S.contractWallet}/create-token`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const d = await r.json();
-                
-                if (!r.ok) {
-                    let errorMsg = d.error || 'Failed to prepare token creation';
-                    if (d.hint) errorMsg += `\n\nHint: ${d.hint}`;
-                    if (d.details) console.error('[Trustless] Details:', d.details);
-                    throw new Error(errorMsg);
-                }
-                
-                addLog(`Mint will be: ${d.mint.slice(0,8)}...`, 'info');
-                addLog(`Creator (vault): ${d.vaultPda.slice(0,8)}...`, 'info');
-                
-                // Step 2: Sign with user's wallet
-                updateProgress(35, 'Step 2/4: Sign in your wallet...');
-                
-                if (!window.solana?.isConnected) {
-                    throw new Error('Wallet not connected');
-                }
-                
-                addLog('Please sign the transaction in your wallet...', 'info');
-                
-                // Show Phantom warning if needed (will show behind progress)
-                if (connectedWalletId === 'phantom') {
-                    addLog('⚠️ Phantom may show warning - click "Proceed anyway"', 'info');
-                }
-                
-                const txBuffer = Uint8Array.from(atob(d.transaction), c => c.charCodeAt(0));
-                const transaction = solanaWeb3.Transaction.from(txBuffer);
-                
-                const signed = await window.solana.signTransaction(transaction);
-                const signedBase64 = btoa(String.fromCharCode(...signed.serialize()));
-                
-                // Step 3: Submit to blockchain
-                updateProgress(60, 'Step 3/4: Broadcasting to Solana...');
-                addLog('Submitting transaction...', 'tx');
-                
-                const submitRes = await fetch('/api/contract/submit-tx', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        signedTransaction: signedBase64,
-                        tokenData: {
-                            mint: d.mint,
-                            name: name,
-                            symbol: symbol,
-                            vaultPda: d.vaultPda,
-                            bondingCurve: d.bondingCurve,
-                            metadataUri: d.metadataUri || '',
-                            ownerWallet: S.connectedWallet,
-                            mmWalletAddress: S.contractWallet
-                        }
-                    })
-                });
-                
-                const submitData = await submitRes.json();
-                
-                if (!submitRes.ok) {
-                    throw new Error(submitData.error || 'Failed to submit transaction');
-                }
-                
-                // Step 4: Enable auto-trading (set operator)
-                updateProgress(85, 'Step 4/5: Enabling 24/7 trading...');
-                addLog('Setting up auto-trading operator...', 'info');
-                
-                // Check if operator needs to be set
-                let operatorSetup = false;
-                try {
-                    const hasOp = await checkOperatorStatus(S.contractWallet);
-                    if (!hasOp) {
-                        await setupOperator(S.contractWallet);
-                        operatorSetup = true;
-                        addLog('Auto-trading enabled!', 'info');
-                    } else {
-                        addLog('Auto-trading already enabled', 'info');
-                        operatorSetup = true;
-                    }
-                } catch (opErr) {
-                    console.warn('Operator setup skipped:', opErr.message);
-                    addLog('Note: Auto-trading setup skipped - enable manually in Step 4', 'info');
-                }
-                
-                // Step 5: Finalize
-                updateProgress(95, 'Step 5/5: Starting MM bot...');
-                
-                // Success!
-                S.tokenMint = d.mint;
-                S.running = true; // Bot auto-started on server
-                saveState();
-                markDone(3);
-                await setupStep4();
-                showStep(4);
-                
-                updateProgress(100, 'Token Launched! 🎉');
-                hideProgress();
-                
-                const autoTradingMsg = operatorSetup ? '✅ 24/7 Auto-Trading: ENABLED' : '⚠️ Enable auto-trading in Step 4';
-                showSuccess(`Token Created!\n\nToken: ${name} (${symbol})\nMint: ${d.mint.slice(0,20)}...\nCreator: Vault PDA\n\nCreator fees (0.5%) go to your vault!\n\n${autoTradingMsg}\n\nTX: ${submitData.signature.slice(0,20)}...`);
-                addLog(`Token created and saved to DB`, 'info');
-                
-                if (operatorSetup) {
-                    addLog(`MM bot auto-started - runs forever!`, 'info');
-                    // Show always running status
-                    document.getElementById('alwaysRunningStatus').style.display = 'block';
-                    document.getElementById('btnStart').disabled = true;
-                    document.getElementById('mmStat').textContent = 'Always Running';
-                    document.getElementById('mmStat').className = 'stat-value green';
-                    updateOperatorStatus(true);
-                }
-                
-                setTimeout(refreshBal, 2000);
-            } catch (e) {
-                hideProgress();
-                throw e; // Re-throw to be caught by outer handler
+            // Step 1: Upload metadata and get unsigned transaction
+            const formData = new FormData();
+            formData.append('ownerWallet', S.ownerWallet);
+            formData.append('name', name);
+            formData.append('symbol', symbol);
+            formData.append('description', document.getElementById('tokenDesc').value.trim() || `${name} - the best meme token`);
+            formData.append('twitter', document.getElementById('tokenTwitter').value.trim());
+            formData.append('telegram', document.getElementById('tokenTelegram').value.trim());
+            formData.append('website', document.getElementById('tokenWebsite')?.value?.trim() || '');
+            formData.append('image', document.getElementById('tokenImage').files[0]);
+            
+            const r = await fetch(`/api/contract/wallets/${S.contractWallet}/create-token`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const d = await r.json();
+            
+            if (!r.ok) {
+                // Provide detailed error info
+                let errorMsg = d.error || 'Failed to prepare token creation';
+                if (d.hint) errorMsg += `\n\nHint: ${d.hint}`;
+                if (d.details) console.error('[Trustless] Details:', d.details);
+                throw new Error(errorMsg);
             }
+            
+            addLog(`Mint will be: ${d.mint.slice(0,8)}...`, 'info');
+            addLog(`Creator (vault): ${d.vaultPda.slice(0,8)}...`, 'info');
+            
+            // Step 2: Sign with user's wallet
+            if (!window.solana?.isConnected) {
+                throw new Error('Wallet not connected');
+            }
+            
+            addLog('Please sign the transaction in your wallet...', 'info');
+            
+            const txBuffer = Uint8Array.from(atob(d.transaction), c => c.charCodeAt(0));
+            const transaction = solanaWeb3.Transaction.from(txBuffer);
+            
+            const signed = await window.solana.signTransaction(transaction);
+            const signedBase64 = btoa(String.fromCharCode(...signed.serialize()));
+            
+            // Step 3: Submit to blockchain with token data for DB save
+            addLog('Submitting transaction...', 'tx');
+            
+            const submitRes = await fetch('/api/contract/submit-tx', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    signedTransaction: signedBase64,
+                    tokenData: {
+                        mint: d.mint,
+                        name: name,
+                        symbol: symbol,
+                        vaultPda: d.vaultPda,
+                        bondingCurve: d.bondingCurve,
+                        metadataUri: d.metadataUri || '',
+                        ownerWallet: S.connectedWallet,
+                        mmWalletAddress: S.contractWallet
+                    }
+                })
+            });
+            
+            const submitData = await submitRes.json();
+            
+            if (!submitRes.ok) {
+                throw new Error(submitData.error || 'Failed to submit transaction');
+            }
+            
+            // Success!
+            S.tokenMint = d.mint;
+            S.running = true; // Bot auto-started on server
+            saveState();
+            markDone(3);
+            await setupStep4();
+            showStep(4);
+            
+            showSuccess(`Token Created & MM Auto-Started!\n\nToken: ${name} (${symbol})\nMint: ${d.mint.slice(0,20)}...\nCreator: Vault PDA\n\nCreator fees (0.5%) go to your vault!\n\nMM BOT IS NOW ALWAYS RUNNING\nIt will trade 24/7 on the server.\n\nTX: ${submitData.signature.slice(0,20)}...`);
+            addLog(`Token created and saved to DB`, 'info');
+            addLog(`MM bot auto-started - runs forever!`, 'info');
+            
+            // Show always running status
+            document.getElementById('alwaysRunningStatus').style.display = 'block';
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('mmStat').textContent = 'Always Running';
+            document.getElementById('mmStat').className = 'stat-value green';
+            
+            setTimeout(refreshBal, 2000);
+        }
+
+        async function useExisting() {
+            if (!validateWalletExists()) return;
+            
+            const mint = document.getElementById('existingMint').value.trim();
+            
+            if (!mint) {
+                showError('Please enter a token mint address');
+                return;
+            }
+            
+            if (mint.length < 32 || mint.length > 50) {
+                showError('Invalid token mint address format');
+                return;
+            }
+            
+            // If using trustless wallet, record the token on the contract
+            if (S.walletType === 'trustless' && S.contractWallet) {
+                try {
+                    const r = await fetch(`/api/contract/wallets/${S.contractWallet}/set-token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ownerWallet: S.ownerWallet,
+                            tokenMint: mint
+                        })
+                    });
+                    
+                    const d = await r.json();
+                    if (!r.ok) {
+                        throw new Error(d.error || 'Failed to set token');
+                    }
+                    
+                    addLog(`Token ${mint.slice(0,8)}... linked to trustless wallet`, 'info');
+                } catch (e) {
+                    showError('Failed to link token: ' + e.message);
+                    return;
+                }
+            }
+            
+            S.tokenMint = mint;
+            saveState();
+            markDone(3);
+            setupStep4();
+            showStep(4);
+            showSuccess(`Using existing token: ${mint.slice(0,20)}...`);
         }
 
         // =====================================================================
