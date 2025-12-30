@@ -1,8 +1,7 @@
 /**
  * Smart Contract Client for MM Wallet Program v2
  * 
- * Matches the deployed contract at: 4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5
- * IDL from: C:\Users\salva\Downloads\server\mm-bot\mm\idl.json
+ * Program ID: 4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5
  */
 
 import { 
@@ -10,8 +9,10 @@ import {
     SystemProgram, 
     Transaction,
     TransactionInstruction,
-    LAMPORTS_PER_SOL
+    LAMPORTS_PER_SOL,
+    Keypair
 } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import BN from 'bn.js';
 
 // ============================================================================
@@ -53,7 +54,7 @@ function getUserVolumeAccumulator(user) {
 }
 
 // Helper to derive creator vault
-function getCreatorVault(creator) {
+export function getCreatorVault(creator) {
     const creatorPubkey = typeof creator === 'string' ? new PublicKey(creator) : creator;
     const [address] = PublicKey.findProgramAddressSync(
         [Buffer.from('creator-vault'), creatorPubkey.toBuffer()],
@@ -64,8 +65,15 @@ function getCreatorVault(creator) {
 
 // Metaplex Metadata Program
 export const METADATA_PROGRAM = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+export const MPL_TOKEN_METADATA = METADATA_PROGRAM; // Alias for SDK compatibility
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 export const SYSVAR_RENT_PUBKEY = new PublicKey('SysvarRent111111111111111111111111111111111');
+
+// Pump.fun Mayhem Mode (CreateV2) constants
+export const MAYHEM_PROGRAM_ID = new PublicKey('MAyhSmzXzV1pTf7LsNkrNwkWKTo4ougAJ1PPg47MD4e');
+export const MAYHEM_GLOBAL_PARAMS = new PublicKey('13ec7XdrjF3h3YcqBTFDSReRcUFwbCnJaAQspM4j6DDJ');
+export const MAYHEM_SOL_VAULT = new PublicKey('BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s');
 
 // Anchor instruction discriminators (sha256 hash of "global:<instruction_name>")[0..8]
 const DISCRIMINATORS = {
@@ -390,17 +398,11 @@ export function createResumeInstruction(mmWallet, owner) {
 // ============================================================================
 
 /**
- * Derive Pump.fun accounts for token creation
- * The mint is derived from the vault PDA, making it deterministic
+ * Derive Pump.fun accounts for token creation from a given mint
+ * NOTE: Pump.fun uses a NEW Keypair for mint, not derived PDAs!
  */
-export function derivePumpFunAccounts(vaultPda) {
-    const vaultPubkey = typeof vaultPda === 'string' ? new PublicKey(vaultPda) : vaultPda;
-    
-    // Mint PDA - derived from vault (creator)
-    const [mint] = PublicKey.findProgramAddressSync(
-        [Buffer.from('mint'), vaultPubkey.toBuffer()],
-        PUMP_FUN_PROGRAM
-    );
+export function derivePumpFunAccounts(mintPubkey) {
+    const mint = typeof mintPubkey === 'string' ? new PublicKey(mintPubkey) : mintPubkey;
     
     // Bonding curve PDA
     const [bondingCurve] = PublicKey.findProgramAddressSync(
@@ -408,11 +410,8 @@ export function derivePumpFunAccounts(vaultPda) {
         PUMP_FUN_PROGRAM
     );
     
-    // Bonding curve token account (associated token account for bonding curve)
-    const [bondingCurveTokenAccount] = PublicKey.findProgramAddressSync(
-        [bondingCurve.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-        new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL') // Associated Token Program
-    );
+    // Bonding curve ATA
+    const bondingCurveAta = getAssociatedTokenAddressSync(mint, bondingCurve, true);
     
     // Metadata PDA
     const [metadata] = PublicKey.findProgramAddressSync(
@@ -423,75 +422,138 @@ export function derivePumpFunAccounts(vaultPda) {
     return {
         mint,
         bondingCurve,
-        bondingCurveTokenAccount,
+        bondingCurveAta,
         metadata,
     };
 }
 
 /**
  * Create instruction to create a token on Pump.fun with PDA as creator
- * This makes creator fees (0.5%) go directly to the vault!
+ * This makes creator fees go directly to the vault!
+ * 
+ * IMPORTANT: You need to generate a NEW Keypair for the mint and pass it!
+ * The mint keypair must sign the transaction.
+ * 
+ * @param owner - Owner wallet pubkey
+ * @param nonce - Nonce for PDA derivation
+ * @param mintKeypair - NEW Keypair for the token mint (must sign tx!)
+ * @param name - Token name
+ * @param symbol - Token symbol  
+ * @param uri - Metadata URI
  */
-export function createTokenInstruction(owner, nonce, name, symbol, uri) {
+export function createTokenInstruction(owner, nonce, mintKeypair, name, symbol, uri) {
     const ownerPubkey = typeof owner === 'string' ? new PublicKey(owner) : owner;
     const { pda: mmWallet } = getMmWalletPDA(ownerPubkey, nonce);
     const { pda: vaultPda } = getPdaWalletAddress(ownerPubkey, nonce);
+    const mint = mintKeypair.publicKey;
     
-    // Derive all Pump.fun accounts
-    const pumpAccounts = derivePumpFunAccounts(vaultPda);
+    // Derive Pump.fun accounts from the mint
+    const pumpAccounts = derivePumpFunAccounts(mint);
+    const vaultAta = getAssociatedTokenAddressSync(mint, vaultPda, true);
     
-    // Serialize string arguments with length prefix (Anchor borsh format)
+    // Pump.fun legacy create discriminator (SDK uses this)
+    const PUMP_LEGACY_DISCRIMINATOR = Buffer.from([24, 30, 200, 40, 5, 28, 7, 119]);
+    
     const nameBytes = Buffer.from(name, 'utf8');
     const symbolBytes = Buffer.from(symbol, 'utf8');
     const uriBytes = Buffer.from(uri, 'utf8');
     
-    const data = Buffer.concat([
-        DISCRIMINATORS.createToken,
-        Buffer.from(new Uint32Array([nameBytes.length]).buffer),
-        nameBytes,
-        Buffer.from(new Uint32Array([symbolBytes.length]).buffer),
-        symbolBytes,
-        Buffer.from(new Uint32Array([uriBytes.length]).buffer),
-        uriBytes,
-    ]);
+    // Build pumpCreateData - EXACT format from working test:
+    // discriminator (8) + name (4+len) + symbol (4+len) + uri (4+len) + creator (32)
+    const pumpCreateData = Buffer.alloc(8 + 4 + nameBytes.length + 4 + symbolBytes.length + 4 + uriBytes.length + 32);
+    let pumpOffset = 0;
     
-    // Main accounts
-    const keys = [
-        { pubkey: mmWallet, isSigner: false, isWritable: true },
-        { pubkey: vaultPda, isSigner: false, isWritable: true },  // PDA signs via contract
-        { pubkey: ownerPubkey, isSigner: true, isWritable: true },
+    PUMP_LEGACY_DISCRIMINATOR.copy(pumpCreateData, pumpOffset);
+    pumpOffset += 8;
+    
+    pumpCreateData.writeUInt32LE(nameBytes.length, pumpOffset);
+    pumpOffset += 4;
+    nameBytes.copy(pumpCreateData, pumpOffset);
+    pumpOffset += nameBytes.length;
+    
+    pumpCreateData.writeUInt32LE(symbolBytes.length, pumpOffset);
+    pumpOffset += 4;
+    symbolBytes.copy(pumpCreateData, pumpOffset);
+    pumpOffset += symbolBytes.length;
+    
+    pumpCreateData.writeUInt32LE(uriBytes.length, pumpOffset);
+    pumpOffset += 4;
+    uriBytes.copy(pumpCreateData, pumpOffset);
+    pumpOffset += uriBytes.length;
+    
+    // creator pubkey (vault PDA) - REQUIRED for Pump.fun create!
+    vaultPda.toBuffer().copy(pumpCreateData, pumpOffset);
+    
+    // Build MM instruction data
+    const numCreateAccounts = 14;
+    const data = Buffer.alloc(8 + 4 + pumpCreateData.length + 1);
+    let offset = 0;
+    
+    DISCRIMINATORS.createToken.copy(data, offset);
+    offset += 8;
+    
+    data.writeUInt32LE(pumpCreateData.length, offset);
+    offset += 4;
+    
+    pumpCreateData.copy(data, offset);
+    offset += pumpCreateData.length;
+    
+    data.writeUInt8(numCreateAccounts, offset);
+    
+    // Pump.fun legacy create accounts (14 total) - EXACT ORDER FROM WORKING TEST
+    const createAccounts = [
+        mint,                        // 0: mint (signer)
+        PUMP_MINT_AUTHORITY,         // 1: mint_authority (Pump.fun's PDA, NOT vault!)
+        pumpAccounts.bondingCurve,   // 2: bonding_curve
+        pumpAccounts.bondingCurveAta,// 3: bonding_curve_ata
+        PUMP_GLOBAL,                 // 4: global
+        MPL_TOKEN_METADATA,          // 5: mpl_token_metadata
+        pumpAccounts.metadata,       // 6: metadata
+        vaultPda,                    // 7: user/creator (vault PDA - THE CREATOR!)
+        SystemProgram.programId,     // 8: system_program
+        TOKEN_PROGRAM_ID,            // 9: token_program
+        ASSOCIATED_TOKEN_PROGRAM,    // 10: associated_token_program
+        SYSVAR_RENT_PUBKEY,          // 11: rent
+        PUMP_EVENT_AUTHORITY,        // 12: event_authority
+        PUMP_FUN_PROGRAM,            // 13: program
     ];
     
-    // Remaining accounts for Pump.fun CPI
-    const remainingAccounts = [
-        { pubkey: pumpAccounts.mint, isSigner: false, isWritable: true },
-        { pubkey: vaultPda, isSigner: false, isWritable: true },  // Creator (PDA)
-        { pubkey: pumpAccounts.bondingCurve, isSigner: false, isWritable: true },
-        { pubkey: pumpAccounts.bondingCurveTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: PUMP_GLOBAL, isSigner: false, isWritable: false },
-        { pubkey: PUMP_FEE_RECIPIENT, isSigner: false, isWritable: true },
-        { pubkey: pumpAccounts.metadata, isSigner: false, isWritable: true },
-        { pubkey: PUMP_EVENT_AUTHORITY, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
-        { pubkey: METADATA_PROGRAM, isSigner: false, isWritable: false },
-        { pubkey: PUMP_FUN_PROGRAM, isSigner: false, isWritable: false },
+    // Build keys array - MUST MATCH CONTRACT'S CreateToken STRUCT!
+    // Contract expects: mm_wallet, pda_wallet, owner, target_program, system_program
+    const keys = [
+        // Main accounts for CreateToken struct (5 accounts)
+        { pubkey: mmWallet, isSigner: false, isWritable: true },           // 0: mm_wallet
+        { pubkey: vaultPda, isSigner: false, isWritable: true },           // 1: pda_wallet
+        { pubkey: ownerPubkey, isSigner: true, isWritable: true },         // 2: owner
+        { pubkey: PUMP_FUN_PROGRAM, isSigner: false, isWritable: false },  // 3: target_program
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // 4: system_program
+        // Remaining accounts for Pump.fun CPI (14 accounts)
+        ...createAccounts.map((pubkey, i) => ({
+            pubkey,
+            isSigner: i === 0, // Only mint (index 0) is signer
+            isWritable: [0, 2, 3, 6, 7].includes(i),
+        })),
     ];
     
     return {
         instruction: new TransactionInstruction({
-            keys: [...keys, ...remainingAccounts],
+            keys,
             programId: MM_WALLET_PROGRAM_ID,
             data,
         }),
-        mint: pumpAccounts.mint,
+        mint,
+        mintKeypair,  // Return so caller can add to signers
         bondingCurve: pumpAccounts.bondingCurve,
+        metadata: pumpAccounts.metadata,
+        vaultTokenAta: vaultAta,
     };
 }
 
-// Pump.fun mint authority (fixed address)
-const PUMP_MINT_AUTHORITY = new PublicKey('TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM');
+// Pump.fun mint authority PDA (derived, not fixed address!)
+const [PUMP_MINT_AUTHORITY] = PublicKey.findProgramAddressSync(
+    [Buffer.from('mint-authority')],
+    PUMP_FUN_PROGRAM
+);
 const ASSOCIATED_TOKEN_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
 /**
@@ -527,90 +589,175 @@ export function derivePumpFunAccountsFromMint(mintPubkey) {
 }
 
 /**
- * Create instruction to create token using known mm_wallet and vault addresses
- * 
- * IMPORTANT: This requires a NEW mint keypair to be generated by the caller!
- * The mint keypair must be passed and will sign the transaction client-side.
- * 
- * Account order for Pump.fun create instruction:
- * 0. mint (signer, writable) - NEW keypair, client signs
- * 1. mint_authority (readonly)
- * 2. bonding_curve (writable)
- * 3. associated_bonding_curve (writable)
- * 4. global_state (readonly)
- * 5. METAPLEX_TOKEN_METADATA (readonly)
- * 6. metadata (writable)
- * 7. user/pda_wallet (signer, writable) - vault PDA signs via invoke_signed
- * 8. SYSTEM_PROGRAM
- * 9. TOKEN_PROGRAM
- * 10. ASSOCIATED_TOKEN_PROGRAM
- * 11. RENT
- * 12. PUMP_EVENT_AUTHORITY
- * 13. PUMP_PROGRAM
+ * Derive Mayhem Mode accounts for CreateV2
  */
-export function createTokenInstructionDirect(mmWallet, vaultPda, owner, mintPubkey, name, symbol, uri, initialBuyLamports = 10000000) {
+function deriveMayhemAccounts(mint) {
+    const mintPubkey = typeof mint === 'string' ? new PublicKey(mint) : mint;
+    
+    // Mayhem State PDA: ["mayhem_state", mint]
+    const [mayhemState] = PublicKey.findProgramAddressSync(
+        [Buffer.from('mayhem_state'), mintPubkey.toBuffer()],
+        MAYHEM_PROGRAM_ID
+    );
+    
+    // Mayhem Token Vault: Token2022 ATA of SOL_VAULT for the mint
+    const mayhemTokenVault = getAssociatedTokenAddressSync(
+        mintPubkey,
+        MAYHEM_SOL_VAULT,
+        true,  // allowOwnerOffCurve
+        TOKEN_2022_PROGRAM_ID  // Token2022!
+    );
+    
+    return { mayhemState, mayhemTokenVault };
+}
+
+/**
+ * Create instruction to create token with PDA as creator
+ * 
+ * WORKING VERSION - Tested and verified on mainnet!
+ * Token: 63qivZsE9AL9yZib7KSx6CTmbvtbvz8e3zw4qJZwvocp
+ * 
+ * Main accounts (7):
+ * 0. mmWallet - writable
+ * 1. vault - writable  
+ * 2. owner - signer, writable
+ * 3. mint - signer, writable
+ * 4. systemProgram
+ * 5. tokenProgram
+ * 6. pumpFunProgram (targetProgram)
+ * 
+ * Remaining accounts (14 for Pump.fun legacy Initialize):
+ */
+export function createTokenInstructionDirect(mmWallet, pdaWallet, owner, mintPubkey, name, symbol, uri) {
     const mmWalletPubkey = typeof mmWallet === 'string' ? new PublicKey(mmWallet) : mmWallet;
-    const vaultPubkey = typeof vaultPda === 'string' ? new PublicKey(vaultPda) : vaultPda;
+    const vault = typeof pdaWallet === 'string' ? new PublicKey(pdaWallet) : pdaWallet;
     const ownerPubkey = typeof owner === 'string' ? new PublicKey(owner) : owner;
     const mint = typeof mintPubkey === 'string' ? new PublicKey(mintPubkey) : mintPubkey;
     
-    // Derive Pump.fun accounts from the mint
-    const pumpAccounts = derivePumpFunAccountsFromMint(mint);
+    // Derive PDAs
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+        [Buffer.from('bonding-curve'), mint.toBuffer()],
+        PUMP_FUN_PROGRAM
+    );
+    const bondingCurveAta = getAssociatedTokenAddressSync(mint, bondingCurve, true);
+    const [metadata] = PublicKey.findProgramAddressSync(
+        [Buffer.from('metadata'), MPL_TOKEN_METADATA.toBuffer(), mint.toBuffer()],
+        MPL_TOKEN_METADATA
+    );
+    const vaultAta = getAssociatedTokenAddressSync(mint, vault, true);
     
-    // Serialize string arguments
+    // Pump.fun legacy create discriminator (SDK uses this)
+    // Contract replaces this with its own, but format must be correct
+    const PUMP_LEGACY_DISCRIMINATOR = Buffer.from([24, 30, 200, 40, 5, 28, 7, 119]);
+    
     const nameBytes = Buffer.from(name, 'utf8');
     const symbolBytes = Buffer.from(symbol, 'utf8');
     const uriBytes = Buffer.from(uri, 'utf8');
     
-    // Serialize initial buy amount as u64 (8 bytes, little-endian)
-    const initialBuyBuffer = Buffer.alloc(8);
-    initialBuyBuffer.writeBigUInt64LE(BigInt(initialBuyLamports));
+    // Build pumpCreateData - EXACT format from working test-pda-legacy.cjs:
+    // discriminator (8) + name (4+len) + symbol (4+len) + uri (4+len) + creator (32)
+    const pumpCreateData = Buffer.alloc(8 + 4 + nameBytes.length + 4 + symbolBytes.length + 4 + uriBytes.length + 32);
+    let pumpOffset = 0;
     
-    const data = Buffer.concat([
-        DISCRIMINATORS.createToken,
-        Buffer.from(new Uint32Array([nameBytes.length]).buffer),
-        nameBytes,
-        Buffer.from(new Uint32Array([symbolBytes.length]).buffer),
-        symbolBytes,
-        Buffer.from(new Uint32Array([uriBytes.length]).buffer),
-        uriBytes,
-        initialBuyBuffer,  // 0.01 SOL = 10,000,000 lamports default
-    ]);
+    // Discriminator
+    PUMP_LEGACY_DISCRIMINATOR.copy(pumpCreateData, pumpOffset);
+    pumpOffset += 8;
     
-    // Main accounts for our MM contract
-    const keys = [
-        { pubkey: mmWalletPubkey, isSigner: false, isWritable: true },
-        { pubkey: vaultPubkey, isSigner: false, isWritable: true },
-        { pubkey: ownerPubkey, isSigner: true, isWritable: true },
+    // name (String = u32 length + bytes)
+    pumpCreateData.writeUInt32LE(nameBytes.length, pumpOffset);
+    pumpOffset += 4;
+    nameBytes.copy(pumpCreateData, pumpOffset);
+    pumpOffset += nameBytes.length;
+    
+    // symbol
+    pumpCreateData.writeUInt32LE(symbolBytes.length, pumpOffset);
+    pumpOffset += 4;
+    symbolBytes.copy(pumpCreateData, pumpOffset);
+    pumpOffset += symbolBytes.length;
+    
+    // uri
+    pumpCreateData.writeUInt32LE(uriBytes.length, pumpOffset);
+    pumpOffset += 4;
+    uriBytes.copy(pumpCreateData, pumpOffset);
+    pumpOffset += uriBytes.length;
+    
+    // creator pubkey (vault PDA) - REQUIRED for Pump.fun create!
+    vault.toBuffer().copy(pumpCreateData, pumpOffset);
+    
+    // Build MM wallet instruction data
+    const numCreateAccounts = 14;
+    const data = Buffer.alloc(8 + 4 + pumpCreateData.length + 1);
+    let offset = 0;
+    
+    // MM discriminator
+    DISCRIMINATORS.createToken.copy(data, offset);
+    offset += 8;
+    
+    // Vec<u8> length prefix (u32 LE)
+    data.writeUInt32LE(pumpCreateData.length, offset);
+    offset += 4;
+    
+    // pump_create_data bytes
+    pumpCreateData.copy(data, offset);
+    offset += pumpCreateData.length;
+    
+    // num_create_accounts (u8)
+    data.writeUInt8(numCreateAccounts, offset);
+    
+    console.log(`[CreateToken] Creating token with PDA as creator`);
+    console.log(`[CreateToken] Vault (creator): ${vault.toBase58()}`);
+    console.log(`[CreateToken] Mint: ${mint.toBase58()}`);
+    console.log(`[CreateToken] name: "${name}", symbol: "${symbol}"`);
+    
+    // Pump.fun legacy create accounts (14 total) - EXACT ORDER FROM WORKING TEST
+    const createAccounts = [
+        mint,                        // 0: mint (signer)
+        PUMP_MINT_AUTHORITY,         // 1: mint_authority (Pump.fun's PDA, NOT vault!)
+        bondingCurve,                // 2: bonding_curve
+        bondingCurveAta,             // 3: bonding_curve_ata
+        PUMP_GLOBAL,                 // 4: global
+        MPL_TOKEN_METADATA,          // 5: mpl_token_metadata
+        metadata,                    // 6: metadata
+        vault,                       // 7: user/creator (vault PDA - THIS IS THE CREATOR!)
+        SystemProgram.programId,     // 8: system_program
+        TOKEN_PROGRAM_ID,            // 9: token_program
+        ASSOCIATED_TOKEN_PROGRAM,    // 10: associated_token_program
+        SYSVAR_RENT_PUBKEY,          // 11: rent
+        PUMP_EVENT_AUTHORITY,        // 12: event_authority
+        PUMP_FUN_PROGRAM,            // 13: program
     ];
     
-    // Remaining accounts for Pump.fun CPI - ORDER IS CRITICAL!
-    const remainingAccounts = [
-        { pubkey: mint, isSigner: true, isWritable: true },                   // 0. mint - client signs
-        { pubkey: PUMP_MINT_AUTHORITY, isSigner: false, isWritable: false },  // 1. mint_authority
-        { pubkey: pumpAccounts.bondingCurve, isSigner: false, isWritable: true },         // 2. bonding_curve
-        { pubkey: pumpAccounts.associatedBondingCurve, isSigner: false, isWritable: true }, // 3. associated_bonding_curve
-        { pubkey: PUMP_GLOBAL, isSigner: false, isWritable: false },          // 4. global_state
-        { pubkey: METADATA_PROGRAM, isSigner: false, isWritable: false },     // 5. METAPLEX_TOKEN_METADATA
-        { pubkey: pumpAccounts.metadata, isSigner: false, isWritable: true }, // 6. metadata
-        { pubkey: vaultPubkey, isSigner: false, isWritable: true },           // 7. user (vault PDA signs via CPI)
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // 8. SYSTEM_PROGRAM
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },     // 9. TOKEN_PROGRAM
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM, isSigner: false, isWritable: false }, // 10. ASSOCIATED_TOKEN_PROGRAM
-        { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },   // 11. RENT
-        { pubkey: PUMP_EVENT_AUTHORITY, isSigner: false, isWritable: false }, // 12. PUMP_EVENT_AUTHORITY
-        { pubkey: PUMP_FUN_PROGRAM, isSigner: false, isWritable: false },     // 13. PUMP_PROGRAM
+    // Build keys array - MUST MATCH CONTRACT'S CreateToken STRUCT!
+    // Contract expects: mm_wallet, pda_wallet, owner, target_program, system_program
+    // Then remaining_accounts for Pump.fun CPI
+    const keys = [
+        // Main accounts for CreateToken struct (5 accounts)
+        { pubkey: mmWalletPubkey, isSigner: false, isWritable: true },      // 0: mm_wallet
+        { pubkey: vault, isSigner: false, isWritable: true },               // 1: pda_wallet
+        { pubkey: ownerPubkey, isSigner: true, isWritable: true },          // 2: owner
+        { pubkey: PUMP_FUN_PROGRAM, isSigner: false, isWritable: false },   // 3: target_program
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // 4: system_program
+        // Remaining accounts for Pump.fun CPI (14 accounts)
+        // Mint is at index 0 and must be a signer!
+        ...createAccounts.map((pubkey, i) => ({
+            pubkey,
+            isSigner: i === 0, // Only mint (index 0) is signer in remaining accounts
+            isWritable: [0, 2, 3, 6, 7].includes(i), // mint, bonding_curve, bonding_curve_ata, metadata, user
+        })),
     ];
     
     return {
         instruction: new TransactionInstruction({
-            keys: [...keys, ...remainingAccounts],
             programId: MM_WALLET_PROGRAM_ID,
+            keys,
             data,
         }),
         mint,
-        bondingCurve: pumpAccounts.bondingCurve,
-        metadata: pumpAccounts.metadata,
+        mintKeypair: null, // Caller provides this
+        bondingCurve,
+        metadata,
+        vaultTokenAta: vaultAta,
+        accounts: createAccounts,
     };
 }
 
@@ -658,6 +805,84 @@ export function createExtendLockInstruction(mmWallet, owner, additionalSeconds) 
         { pubkey: mmWalletPubkey, isSigner: false, isWritable: true },
         { pubkey: ownerPubkey, isSigner: true, isWritable: false },
     ];
+    
+    return new TransactionInstruction({
+        keys,
+        programId: MM_WALLET_PROGRAM_ID,
+        data,
+    });
+}
+
+/**
+ * Get creator vault balance (accumulated trading fees from being the token creator)
+ * @param connection - Solana connection
+ * @param creator - The creator address (vault PDA that created the token)
+ * @returns Balance in SOL
+ */
+export async function getCreatorFees(connection, creator) {
+    const creatorPubkey = typeof creator === 'string' ? new PublicKey(creator) : creator;
+    const creatorVault = getCreatorVault(creatorPubkey);
+    try {
+        const balance = await connection.getBalance(creatorVault);
+        return balance / 1e9; // Return in SOL
+    } catch (e) {
+        return 0;
+    }
+}
+
+/**
+ * Create instruction to claim accumulated creator fees
+ * When the vault PDA is the token creator, trading fees accumulate in its creator vault
+ * 
+ * WORKING VERSION - Tested on mainnet!
+ * Tx: 5Bp64tx4fbYjYv6ieGy62PqvE5PVop2SbjnKq2PNvKLFfvNthHNkYh3uBSLmepwVopsGvAjd61v6UXEXxFDvgDGH
+ * 
+ * Contract ClaimFees struct:
+ * 0. mmWallet - writable
+ * 1. pdaWallet (vault) - writable
+ * 2. caller - signer
+ * 
+ * Remaining accounts for Pump.fun claim CPI (5 total):
+ * 0. vault (creator) - writable
+ * 1. creator_vault - writable  
+ * 2. system_program
+ * 3. event_authority
+ * 4. pump_fun_program
+ */
+export function createClaimFeesInstruction(
+    mmWallet,
+    vault,
+    caller
+) {
+    const mmWalletPubkey = typeof mmWallet === 'string' ? new PublicKey(mmWallet) : mmWallet;
+    const vaultPubkey = typeof vault === 'string' ? new PublicKey(vault) : vault;
+    const callerPubkey = typeof caller === 'string' ? new PublicKey(caller) : caller;
+    
+    // Derive creator vault PDA (where Pump.fun deposits creator fees)
+    const creatorVault = getCreatorVault(vaultPubkey);
+    
+    // Pump.fun claim accounts (from PumpPortal - VERIFIED WORKING)
+    const claimAccounts = [
+        { pubkey: vaultPubkey, isSigner: false, isWritable: true },      // 0: creator (vault PDA)
+        { pubkey: creatorVault, isSigner: false, isWritable: true },     // 1: creator_vault
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // 2: system_program
+        { pubkey: PUMP_EVENT_AUTHORITY, isSigner: false, isWritable: false },    // 3: event_authority
+        { pubkey: PUMP_FUN_PROGRAM, isSigner: false, isWritable: false },        // 4: program
+    ];
+    
+    const data = DISCRIMINATORS.claimFees;
+    
+    const keys = [
+        // Main accounts for ClaimFees struct
+        { pubkey: mmWalletPubkey, isSigner: false, isWritable: true },
+        { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+        { pubkey: callerPubkey, isSigner: true, isWritable: false },
+        // Remaining accounts for Pump.fun CPI
+        ...claimAccounts,
+    ];
+    
+    console.log(`[ClaimFees] Creator (vault): ${vaultPubkey.toBase58()}`);
+    console.log(`[ClaimFees] CreatorVault: ${creatorVault.toBase58()}`);
     
     return new TransactionInstruction({
         keys,
@@ -1089,7 +1314,9 @@ export async function getMmWalletInfo(connection, mmWallet) {
         
         return {
             mmWalletAddress: mmWalletPubkey.toBase58(),
+            mmWalletPda: mmWalletPubkey,
             pdaWalletAddress: vaultPda.toBase58(),
+            vault: vaultPda,
             balanceSOL,
             isLocked,
             lockRemaining,
@@ -1146,4 +1373,94 @@ export function formatLockTime(seconds) {
  */
 export function daysToSeconds(days) {
     return days * 24 * 60 * 60;
+}
+
+// ============================================================================
+// CONVENIENCE FUNCTIONS
+// ============================================================================
+
+/**
+ * Create a new token with PDA as creator - FULL TRANSACTION BUILDER
+ * 
+ * Usage:
+ * ```js
+ * const { transaction, mint, signers } = await buildCreateTokenTransaction(
+ *   connection, owner, nonce, 'Token Name', 'SYMBOL', 'https://uri...'
+ * );
+ * // Add owner and mint keypairs to signers, then send
+ * ```
+ * 
+ * @returns Transaction + mint pubkey + signers array (includes mintKeypair)
+ */
+export async function buildCreateTokenTransaction(
+    connection,
+    owner,
+    nonce,
+    name,
+    symbol,
+    uri,
+    priorityFeeMicroLamports = 100000
+) {
+    const ownerPubkey = typeof owner === 'string' ? new PublicKey(owner) : owner;
+    
+    // Generate new mint keypair
+    const mintKeypair = Keypair.generate();
+    
+    // Build create token instruction
+    const result = createTokenInstruction(ownerPubkey, nonce, mintKeypair, name, symbol, uri);
+    
+    // Build transaction
+    const transaction = new Transaction();
+    
+    // Add compute budget if needed
+    const { ComputeBudgetProgram } = await import('@solana/web3.js');
+    transaction.add(
+        ComputeBudgetProgram.setComputeUnitPrice({
+            microLamports: priorityFeeMicroLamports,
+        })
+    );
+    transaction.add(
+        ComputeBudgetProgram.setComputeUnitLimit({
+            units: 400000,
+        })
+    );
+    
+    // Add create token instruction
+    transaction.add(result.instruction);
+    
+    // Get blockhash
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = ownerPubkey;
+    
+    return {
+        transaction,
+        mint: mintKeypair.publicKey,
+        mintKeypair,
+        bondingCurve: result.bondingCurve,
+        metadata: result.metadata,
+        vaultTokenAta: result.vaultTokenAta,
+        signers: [mintKeypair],  // Owner must also sign but caller handles that
+    };
+}
+
+/**
+ * Get all info needed for a token created by PDA
+ */
+export async function getTokenCreatorInfo(connection, vault) {
+    const vaultPubkey = typeof vault === 'string' ? new PublicKey(vault) : vault;
+    
+    // Get creator vault and its balance
+    const creatorVault = getCreatorVault(vaultPubkey);
+    let feesSOL = 0;
+    try {
+        const balance = await connection.getBalance(creatorVault);
+        feesSOL = balance / LAMPORTS_PER_SOL;
+    } catch (e) {}
+    
+    return {
+        creator: vaultPubkey.toBase58(),
+        creatorVault: creatorVault.toBase58(),
+        accumulatedFeesSOL: feesSOL,
+    };
 }

@@ -1,0 +1,253 @@
+{
+  "version": "2.0.0",
+  "name": "mm_wallet_v2",
+  "address": "4ZzKbBw9o1CuVgGVokLNWsgHy9Acnd4EzVH5N6nnbyf5",
+  "metadata": {
+    "name": "MM Wallet V2",
+    "description": "Trustless Market Making Wallet for Pump.fun tokens",
+    "repository": "https://github.com/DylanPort/MM-Whistle"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false, "pda": { "seeds": ["mm_wallet", "owner", "nonce"] } },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false, "pda": { "seeds": ["vault", "owner", "nonce"] } },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "nonce", "type": "u64" },
+        { "name": "lockDurationSeconds", "type": "i64" },
+        { "name": "strategyConfig", "type": { "defined": "StrategyConfig" } }
+      ]
+    },
+    {
+      "name": "deposit",
+      "discriminator": [242, 35, 198, 137, 82, 225, 242, 182],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [183, 18, 70, 156, 148, 109, 161, 34],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "executeBuy",
+      "discriminator": [138, 127, 14, 91, 32, 45, 156, 237],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "caller", "isMut": true, "isSigner": true }
+      ],
+      "args": [
+        { "name": "solAmount", "type": "u64" },
+        { "name": "minTokensOut", "type": "u64" }
+      ],
+      "remainingAccounts": "Pump.fun buy accounts (12 total)"
+    },
+    {
+      "name": "executeSell",
+      "discriminator": [108, 48, 168, 213, 145, 21, 62, 245],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "caller", "isMut": true, "isSigner": true }
+      ],
+      "args": [
+        { "name": "tokenAmount", "type": "u64" },
+        { "name": "minSolOut", "type": "u64" }
+      ],
+      "remainingAccounts": "Pump.fun sell accounts (12 total)"
+    },
+    {
+      "name": "createToken",
+      "discriminator": [84, 103, 136, 93, 35, 110, 185, 98],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "pdaWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "mint", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "pumpFunProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "pumpCreateData", "type": "bytes" },
+        { "name": "numCreateAccounts", "type": "u8" }
+      ],
+      "remainingAccounts": "Pump.fun create accounts (14 total)"
+    },
+    {
+      "name": "setTokenMint",
+      "discriminator": [67, 142, 201, 110, 203, 36, 198, 144],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "mint", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "setOperator",
+      "discriminator": [155, 129, 149, 159, 214, 183, 75, 1],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": [
+        { "name": "operator", "type": { "option": "publicKey" } }
+      ]
+    },
+    {
+      "name": "pause",
+      "discriminator": [211, 22, 221, 251, 74, 121, 193, 47],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "resume",
+      "discriminator": [90, 193, 5, 203, 163, 120, 191, 226],
+      "accounts": [
+        { "name": "mmWallet", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": false, "isSigner": true }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MmWallet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "operator", "type": { "option": "publicKey" } },
+          { "name": "tokenMint", "type": { "option": "publicKey" } },
+          { "name": "nonce", "type": "u64" },
+          { "name": "vaultBump", "type": "u8" },
+          { "name": "totalDeposited", "type": "u64" },
+          { "name": "totalWithdrawn", "type": "u64" },
+          { "name": "totalBought", "type": "u64" },
+          { "name": "totalSold", "type": "u64" },
+          { "name": "totalFeesClaimed", "type": "u64" },
+          { "name": "tradeCount", "type": "u64" },
+          { "name": "lastTradeTimestamp", "type": "i64" },
+          { "name": "lockUntil", "type": "i64" },
+          { "name": "paused", "type": "bool" },
+          { "name": "isCreator", "type": "bool" },
+          { "name": "strategyConfig", "type": { "defined": "StrategyConfig" } }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "Strategy",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "VolumeBot" },
+          { "name": "PriceReactive" },
+          { "name": "GridTrading" },
+          { "name": "TrendFollower" },
+          { "name": "SpreadMM" },
+          { "name": "PumpHunter" }
+        ]
+      }
+    },
+    {
+      "name": "StrategyConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "strategy", "type": { "defined": "Strategy" } },
+          { "name": "minTradeSize", "type": "u64" },
+          { "name": "maxTradeSize", "type": "u64" },
+          { "name": "targetSpread", "type": "u16" },
+          { "name": "maxSlippage", "type": "u16" },
+          { "name": "cooldownSeconds", "type": "u32" },
+          { "name": "reserved", "type": { "array": ["u8", 32] } }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "WalletInitialized",
+      "fields": [
+        { "name": "wallet", "type": "publicKey" },
+        { "name": "owner", "type": "publicKey" },
+        { "name": "nonce", "type": "u64" }
+      ]
+    },
+    {
+      "name": "Deposited",
+      "fields": [
+        { "name": "wallet", "type": "publicKey" },
+        { "name": "amount", "type": "u64" },
+        { "name": "timestamp", "type": "i64" }
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "fields": [
+        { "name": "wallet", "type": "publicKey" },
+        { "name": "amount", "type": "u64" },
+        { "name": "timestamp", "type": "i64" }
+      ]
+    },
+    {
+      "name": "TradeExecuted",
+      "fields": [
+        { "name": "wallet", "type": "publicKey" },
+        { "name": "isBuy", "type": "bool" },
+        { "name": "solAmount", "type": "u64" },
+        { "name": "timestamp", "type": "i64" }
+      ]
+    },
+    {
+      "name": "TokenCreated",
+      "fields": [
+        { "name": "wallet", "type": "publicKey" },
+        { "name": "mint", "type": "publicKey" },
+        { "name": "timestamp", "type": "i64" }
+      ]
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "Unauthorized", "msg": "Unauthorized access" },
+    { "code": 6001, "name": "UnauthorizedOperator", "msg": "Caller is not owner or authorized operator" },
+    { "code": 6002, "name": "WalletLocked", "msg": "Wallet is locked until the specified time" },
+    { "code": 6003, "name": "InsufficientFunds", "msg": "Insufficient funds in vault" },
+    { "code": 6004, "name": "TradingPaused", "msg": "Trading is currently paused" },
+    { "code": 6005, "name": "InvalidAmount", "msg": "Invalid trade amount" },
+    { "code": 6006, "name": "CooldownActive", "msg": "Trade cooldown period is active" },
+    { "code": 6007, "name": "SlippageExceeded", "msg": "Slippage tolerance exceeded" },
+    { "code": 6008, "name": "InvalidStrategy", "msg": "Invalid strategy configuration" },
+    { "code": 6009, "name": "TokenAlreadySet", "msg": "Token mint already set" },
+    { "code": 6010, "name": "MathOverflow", "msg": "Math overflow" }
+  ]
+}
+

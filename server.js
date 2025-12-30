@@ -49,6 +49,9 @@ import {
     createSetOperatorInstruction,
     createExtendLockInstruction,
     createTokenInstructionDirect,
+    createClaimFeesInstruction,
+    getCreatorFees,
+    getCreatorVault,
     derivePumpFunAccounts,
     isWalletLocked,
     getLockTimeRemaining,
@@ -131,6 +134,8 @@ db.exec(`
         symbol TEXT,
         creatorWallet TEXT,
         bondingCurve TEXT,
+        imageUri TEXT,
+        ownerWallet TEXT,
         migrated INTEGER DEFAULT 0,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
     );
@@ -218,6 +223,12 @@ try {
     // Column already exists
 }
 try {
+    db.exec(`ALTER TABLE tokens ADD COLUMN imageUri TEXT DEFAULT ''`);
+    console.log('[DB] Added imageUri column to tokens table');
+} catch (e) {
+    // Column already exists
+}
+try {
     db.exec(`ALTER TABLE trades ADD COLUMN ownerWallet TEXT DEFAULT ''`);
     console.log('[DB] Added ownerWallet column to trades table');
 } catch (e) {
@@ -247,7 +258,8 @@ try {
 // ============================================================================
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'web')));
 
 // Multer for file uploads
@@ -1661,7 +1673,7 @@ app.post('/api/contract/wallets/create', async (req, res) => {
         const transaction = new Transaction();
         transaction.add(
             ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
-            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }),  // Higher priority for faster confirmation
             instruction
         );
         
@@ -1810,7 +1822,7 @@ app.post('/api/contract/wallets/:address/deposit', async (req, res) => {
         const transaction = new Transaction();
         transaction.add(
             ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 }),
-            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }),  // Higher priority
             instruction
         );
         
@@ -1851,6 +1863,10 @@ app.post('/api/contract/wallets/:address/withdraw', async (req, res) => {
             return res.status(404).json({ error: 'Contract wallet not found' });
         }
         
+        console.log(`[Withdraw] mmWallet: ${mmWalletAddress}`);
+        console.log(`[Withdraw] owner: ${info.owner?.toBase58()}, nonce: ${info.nonce}`);
+        console.log(`[Withdraw] vault: ${info.vault?.toBase58()}, vaultBump: ${info.vaultBump}`);
+        
         if (isWalletLocked(info)) {
             return res.status(400).json({ 
                 error: `Wallet is locked. Time remaining: ${formatLockTime(getLockTimeRemaining(info))}`,
@@ -1874,11 +1890,13 @@ app.post('/api/contract/wallets/:address/withdraw', async (req, res) => {
             amountLamports
         );
         
+        console.log(`[Withdraw] Creating tx for ${amountSOL} SOL (${amountLamports} lamports)`);
+        
         const { Transaction, ComputeBudgetProgram } = await import('@solana/web3.js');
         const transaction = new Transaction();
         transaction.add(
             ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 }),
-            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }),  // Higher priority
             instruction
         );
         
@@ -1963,6 +1981,106 @@ app.post('/api/contract/wallets/:address/resume', async (req, res) => {
         const serialized = transaction.serialize({ requireAllSignatures: false }).toString('base64');
         
         res.json({ success: true, transaction: serialized });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Get creator fees balance for a vault
+app.get('/api/contract/wallets/:address/creator-fees', async (req, res) => {
+    try {
+        const conn = getConnection();
+        const mmWalletAddress = req.params.address;
+        
+        const info = await getMmWalletInfo(conn, mmWalletAddress);
+        if (!info) {
+            return res.status(404).json({ error: 'Contract wallet not found' });
+        }
+        
+        // Get vault PDA
+        const vaultResult = getPdaWalletAddress(info.owner, info.nonce);
+        const vaultPda = vaultResult.pda;
+        
+        // Get creator vault balance (accumulated fees from being token creator)
+        const creatorFeesSOL = await getCreatorFees(conn, vaultPda);
+        const creatorVaultAddress = getCreatorVault(vaultPda);
+        
+        console.log(`[CreatorFees] Vault: ${vaultPda.toBase58()}, Creator Vault: ${creatorVaultAddress.toBase58()}, Balance: ${creatorFeesSOL} SOL`);
+        
+        res.json({
+            vaultAddress: vaultPda.toBase58(),
+            creatorVaultAddress: creatorVaultAddress.toBase58(),
+            feesSOL: creatorFeesSOL,
+            feesLamports: Math.floor(creatorFeesSOL * 1e9)
+        });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Claim creator fees - returns unsigned transaction
+app.post('/api/contract/wallets/:address/claim-fees', async (req, res) => {
+    const { ownerWallet } = req.body;
+    
+    if (!ownerWallet) {
+        return res.status(400).json({ error: 'ownerWallet required' });
+    }
+    
+    try {
+        const conn = getConnection();
+        const mmWalletAddress = req.params.address;
+        
+        const info = await getMmWalletInfo(conn, mmWalletAddress);
+        if (!info) {
+            return res.status(404).json({ error: 'Contract wallet not found' });
+        }
+        
+        if (info.owner?.toBase58() !== ownerWallet) {
+            return res.status(403).json({ error: 'Access denied - not your wallet' });
+        }
+        
+        if (!info.tokenMint || info.tokenMint.toBase58() === '11111111111111111111111111111111') {
+            return res.status(400).json({ error: 'No token associated with this wallet' });
+        }
+        
+        // Get vault PDA
+        const vaultResult = getPdaWalletAddress(info.owner, info.nonce);
+        const vaultPda = vaultResult.pda;
+        
+        // Check if there are fees to claim
+        const creatorFeesSOL = await getCreatorFees(conn, vaultPda);
+        if (creatorFeesSOL <= 0) {
+            return res.status(400).json({ error: 'No creator fees to claim' });
+        }
+        
+        const ownerPubkey = new PublicKey(ownerWallet);
+        const transaction = new Transaction();
+        
+        transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 }));
+        transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }));  // Higher priority
+        
+        const claimIx = createClaimFeesInstruction(
+            mmWalletAddress,
+            vaultPda,
+            ownerWallet,
+            info.tokenMint
+        );
+        
+        transaction.add(claimIx);
+        
+        const { blockhash } = await conn.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = ownerPubkey;
+        
+        const serialized = transaction.serialize({ requireAllSignatures: false }).toString('base64');
+        
+        console.log(`[ClaimFees] Prepared claim for ${creatorFeesSOL} SOL from vault ${vaultPda.toBase58()}`);
+        
+        res.json({ 
+            success: true, 
+            transaction: serialized,
+            feesSOL: creatorFeesSOL
+        });
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
@@ -2054,6 +2172,15 @@ app.post('/api/contract/wallets/:address/create-token', upload.single('image'), 
         const vaultResult = getPdaWalletAddress(info.owner, info.nonce);
         const vaultPda = vaultResult.pda;
         
+        console.log(`[Contract] CreateToken DEBUG:`);
+        console.log(`[Contract]   mmWalletAddress (URL param): ${mmWalletAddress}`);
+        console.log(`[Contract]   info.owner: ${info.owner?.toBase58()}`);
+        console.log(`[Contract]   info.nonce: ${info.nonce}`);
+        console.log(`[Contract]   Derived vault: ${vaultPda.toBase58()}`);
+        console.log(`[Contract]   vault bump: ${vaultResult.bump}`);
+        console.log(`[Contract]   info.vaultBump (on-chain): ${info.vaultBump}`);
+        console.log(`[Contract]   ownerWallet (request): ${ownerWallet}`);
+        
         // Step 3: Generate a NEW mint keypair for this token
         const { Keypair, Transaction, ComputeBudgetProgram } = await import('@solana/web3.js');
         const mintKeypair = Keypair.generate();
@@ -2061,25 +2188,27 @@ app.post('/api/contract/wallets/:address/create-token', upload.single('image'), 
         console.log(`[Contract] Generated mint keypair: ${mintKeypair.publicKey.toBase58()}`);
         
         // Create the instruction with the mint pubkey
-        const { instruction, mint, bondingCurve, metadata } = createTokenInstructionDirect(
-            mmWalletAddress,
-            vaultPda,
+        // pdaWallet MUST be vault PDA (contract validates seeds ["vault", owner, nonce])
+        const { instruction, mint, bondingCurve, metadata, vaultTokenAta } = createTokenInstructionDirect(
+            mmWalletAddress,         // mmWallet (config account)
+            vaultPda,                // pdaWallet = vault PDA (required by contract's seeds constraint)
             ownerWallet,
-            mintKeypair.publicKey,  // Pass mint pubkey
+            mintKeypair.publicKey,   // mint
             name,
             symbol,
             metadataUri
         );
         
-        // Build transaction
+        // Build transaction with high priority for fast inclusion
         const transaction = new Transaction();
         transaction.add(
             ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),  // Increased for CPI
-            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 150000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }), // High priority!
             instruction
         );
         
-        const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
+        // Get fresh blockhash with 'finalized' for longer validity
+        const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('finalized');
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = new PublicKey(ownerWallet);
         
@@ -2218,14 +2347,70 @@ app.post('/api/contract/submit-tx', async (req, res) => {
         const conn = getConnection();
         const txBuffer = Buffer.from(signedTransaction, 'base64');
         
-        const signature = await conn.sendRawTransaction(txBuffer, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-        });
+        let signature;
         
-        await conn.confirmTransaction(signature, 'confirmed');
+        // Retry sending up to 3 times
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                signature = await conn.sendRawTransaction(txBuffer, {
+                    skipPreflight: true,
+                    maxRetries: 3,
+                });
+                console.log(`[Submit] TX sent (attempt ${attempt}): ${signature}`);
+                break;
+            } catch (sendErr) {
+                console.error(`[Submit] Send attempt ${attempt} failed:`, sendErr.message);
+                if (attempt === 3) throw sendErr;
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
         
-        console.log(`[Contract] Transaction confirmed: ${signature}`);
+        // Quick poll for confirmation (15 seconds max, then return pending)
+        let confirmed = false;
+        let txError = null;
+        
+        for (let i = 0; i < 30; i++) {  // 15 seconds max - return faster
+            await new Promise(r => setTimeout(r, 500));
+            
+            try {
+                const status = await conn.getSignatureStatus(signature);
+                
+                if (status?.value?.err) {
+                    txError = status.value.err;
+                    console.error(`[Submit] TX failed:`, txError);
+                    break;
+                }
+                
+                if (status?.value?.confirmationStatus === 'confirmed' || 
+                    status?.value?.confirmationStatus === 'finalized') {
+                    confirmed = true;
+                    console.log(`[Submit] TX confirmed: ${status.value.confirmationStatus}`);
+                    break;
+                }
+            } catch (e) {
+                // Continue polling
+            }
+        }
+        
+        if (txError) {
+            const txInfo = await conn.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+            const logs = txInfo?.meta?.logMessages || [];
+            console.error('[Submit] Logs:', logs.join('\n'));
+            return res.status(400).json({ 
+                error: 'Transaction failed on-chain',
+                details: txError,
+                logs,
+                signature
+            });
+        }
+        
+        // If not confirmed yet, still return the signature - tx might confirm later
+        const isPending = !confirmed;
+        if (isPending) {
+            console.log(`[Submit] TX sent but not confirmed yet (might still confirm): ${signature}`);
+        } else {
+            console.log(`[Contract] Transaction confirmed: ${signature}`);
+        }
         
         // Save token data to DB if provided (for token creation)
         if (tokenData && tokenData.mint) {
@@ -2298,7 +2483,7 @@ app.post('/api/contract/submit-tx', async (req, res) => {
             }
         }
         
-        res.json({ success: true, signature });
+        res.json({ success: true, signature, confirmed: !isPending, pending: isPending });
     } catch (e) {
         console.error('[Contract] Submit error:', e.message);
         res.status(400).json({ error: e.message });
@@ -2548,8 +2733,17 @@ app.get('/api/landing/tokens', async (req, res) => {
         // Get all tokens from database to match with creator wallets
         const allDbTokens = db.prepare(`SELECT * FROM tokens`).all();
         
-        // Get all active bots from database
+        // Get all active bots from database (both regular bots and persistent bots)
         const allDbBots = db.prepare(`SELECT * FROM bots WHERE status = 'running'`).all();
+        const allPersistentBots = db.prepare(`SELECT * FROM persistent_bots`).all();
+        
+        // Build a map of pdaAddress -> persistent bot info (to get token mints)
+        // Column names in persistent_bots: tokenMint, pdaAddress, ownerWallet
+        const pdaToBot = new Map();
+        for (const pbot of allPersistentBots) {
+            pdaToBot.set(pbot.pdaAddress, pbot);
+            console.log(`[Landing] Found persistent bot: ${pbot.tokenMint?.slice(0,8)}... on ${pbot.pdaAddress?.slice(0,8)}...`);
+        }
         
         // Build a map of vault PDA -> token info
         const vaultToToken = new Map();
@@ -2562,10 +2756,22 @@ app.get('/api/landing/tokens', async (req, res) => {
             }
         }
         
-        // Build a map of token mint -> active bot
+        // Build a map of token mint -> active bot (from both tables)
         const mintToBot = new Map();
         for (const bot of allDbBots) {
             mintToBot.set(bot.mint, bot);
+        }
+        // Also add persistent bots to mintToBot
+        for (const pbot of allPersistentBots) {
+            if (pbot.tokenMint && !mintToBot.has(pbot.tokenMint)) {
+                mintToBot.set(pbot.tokenMint, { 
+                    mint: pbot.tokenMint, 
+                    status: pbot.status,
+                    botType: 'persistent',
+                    totalVolume: pbot.totalVolume || 0,
+                    totalTrades: pbot.totalTrades || 0
+                });
+            }
         }
         
         // Get unique owners from contract wallets
@@ -2644,8 +2850,20 @@ app.get('/api/landing/tokens', async (req, res) => {
                         walletData.mint = localWallet.tokenMint;
                     }
                     
-                    // If no token found but isCreator is true, try to discover from on-chain
-                    if (!walletData.mint && wallet.isCreator) {
+                    // Check if there's a persistent bot running for this wallet
+                    const persistentBot = pdaToBot.get(wallet.mmWalletAddress);
+                    if (persistentBot) {
+                        // Always check bot status
+                        walletData.botActive = persistentBot.status === 'running';
+                        // Use token from bot if not found elsewhere
+                        if (persistentBot.tokenMint && !walletData.mint) {
+                            walletData.mint = persistentBot.tokenMint;
+                            console.log(`[Landing] Found token from persistent bot: ${persistentBot.tokenMint.slice(0,8)}...`);
+                        }
+                    }
+                    
+                    // If no token found, try to discover from on-chain (always check, not just when isCreator)
+                    if (!walletData.mint) {
                         try {
                             const vaultTokens = await getVaultTokenMints(getConnection(), wallet.pdaWalletAddress);
                             if (vaultTokens.length > 0) {
@@ -2653,12 +2871,25 @@ app.get('/api/landing/tokens', async (req, res) => {
                                 const tokenWithBalance = vaultTokens.find(t => t.balance > 0) || vaultTokens[0];
                                 walletData.mint = tokenWithBalance.mint;
                                 walletData.discoveredOnChain = true;
+                                walletData.isCreator = true;  // Mark as creator since we found tokens
                                 console.log(`[Landing] Discovered token ${tokenWithBalance.mint} for vault ${wallet.pdaWalletAddress.slice(0,8)}...`);
                                 
                                 // Save to database for future lookups
                                 try {
-                                    db.prepare(`UPDATE contract_wallets SET tokenMint = ? WHERE pdaAddress = ?`)
+                                    db.prepare(`UPDATE contract_wallets SET tokenMint = ?, isCreator = 1 WHERE pdaAddress = ?`)
                                         .run(tokenWithBalance.mint, wallet.mmWalletAddress);
+                                } catch (e) {}
+                                
+                                // Also try to get token metadata from pump.fun
+                                try {
+                                    const pumpRes = await fetch(`https://frontend-api.pump.fun/coins/${tokenWithBalance.mint}`);
+                                    if (pumpRes.ok) {
+                                        const pumpData = await pumpRes.json();
+                                        walletData.name = pumpData.name || 'Unknown Token';
+                                        walletData.symbol = pumpData.symbol || '???';
+                                        walletData.image = pumpData.image_uri || pumpData.uri || null;
+                                        console.log(`[Landing] Got metadata from pump.fun: ${walletData.name} (${walletData.symbol})`);
+                                    }
                                 } catch (e) {}
                             }
                         } catch (e) {

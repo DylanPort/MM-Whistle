@@ -1,0 +1,22 @@
+{
+    "name": "MM.WHISTLE - Solana Market Maker",
+    "short_name": "MM.WHISTLE",
+    "description": "Professional trustless market making tools for Solana tokens",
+    "start_url": "/main",
+    "display": "standalone",
+    "background_color": "#030304",
+    "theme_color": "#c9a227",
+    "icons": [
+        {
+            "src": "/logo.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/logo.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
+
