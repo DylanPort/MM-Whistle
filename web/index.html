@@ -1933,6 +1933,82 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Custom Token MM Panel -->
+            <div class="panel" style="border: 1px solid var(--gold); border-radius: 12px;">
+                <div class="panel-head" style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
+                    </svg>
+                    Custom Token MM
+                    <span style="font-size: 10px; color: var(--gold); margin-left: auto; background: rgba(224, 122, 58, 0.2); padding: 2px 8px; border-radius: 10px;">NEW</span>
+                </div>
+                <div class="panel-body">
+                    <div style="background: rgba(224, 122, 58, 0.1); border: 1px solid rgba(224, 122, 58, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="font-size: 13px; color: #e8e8e8; margin-bottom: 8px; font-weight: 500;">Run Volume Bot for ANY Token</div>
+                        <div style="font-size: 11px; color: #a0a0a0;">
+                            Start a market maker for tokens you didn't create. Works with bonding curve AND graduated PumpSwap tokens.
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="font-size: 12px; color: #a0a0a0; margin-bottom: 6px; display: block;">Token Mint Address</label>
+                        <div class="copy-row">
+                            <input type="text" id="customTokenMint" placeholder="Enter any token mint address...">
+                            <button class="btn btn-secondary" onclick="checkCustomToken()" id="btnCheckCustom">Check</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Custom Token Info (shown after check) -->
+                    <div id="customTokenInfo" style="display: none; background: #1a1a1a; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                            <img id="customTokenImg" src="" style="width: 40px; height: 40px; border-radius: 8px; background: #2d2d2d; display: none;" onerror="this.style.display='none'">
+                            <div>
+                                <div id="customTokenName" style="font-size: 14px; color: #e8e8e8; font-weight: 500;">-</div>
+                                <div id="customTokenSymbol" style="font-size: 12px; color: var(--gold);">-</div>
+                            </div>
+                            <div style="margin-left: auto; text-align: right;">
+                                <div id="customTokenStatus" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(76, 175, 80, 0.2); color: #4CAF50;">-</div>
+                            </div>
+                        </div>
+                        <div class="stats" style="margin: 0;">
+                            <div class="stat">
+                                <div class="stat-label">Price</div>
+                                <div class="stat-value" id="customTokenPrice">-</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">Market Cap</div>
+                                <div class="stat-value" id="customTokenMcap">-</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">Type</div>
+                                <div class="stat-value" id="customTokenType" style="color: var(--gold);">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Select Wallet for Custom MM -->
+                    <div id="customWalletSelect" style="display: none; margin-bottom: 16px;">
+                        <label style="font-size: 12px; color: #a0a0a0; margin-bottom: 6px; display: block;">Select PDA Wallet to Use</label>
+                        <select id="customPdaSelect" style="width: 100%;">
+                            <option value="">-- Select PDA Wallet --</option>
+                        </select>
+                        <div id="customPdaInfo" style="margin-top: 8px; font-size: 11px; color: #707070;">
+                            Balance: <span id="customPdaBal">-</span>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-block" id="btnStartCustomMM" onclick="startCustomMM()" disabled style="background: linear-gradient(135deg, var(--gold), #c5651f);">
+                        Start Custom Volume Bot
+                    </button>
+                    
+                    <div style="margin-top: 12px; font-size: 11px; color: #707070; text-align: center;">
+                        Bot will automatically detect if token is on bonding curve or PumpSwap
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -4567,6 +4643,225 @@
             }, 10000); // Every 10 seconds
         }
 
+        // ============================================================================
+        // CUSTOM TOKEN MM - Run volume bot for any token
+        // ============================================================================
+        
+        let customTokenData = null;
+        
+        async function checkCustomToken() {
+            const mintInput = document.getElementById('customTokenMint');
+            const mint = mintInput.value.trim();
+            
+            if (!mint) {
+                showError('Please enter a token mint address');
+                return;
+            }
+            
+            // Validate it looks like a valid Solana address
+            if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) {
+                showError('Invalid token mint address format');
+                return;
+            }
+            
+            setLoading('btnCheckCustom', true);
+            
+            try {
+                // First try Token Intelligence API
+                const r = await fetch(`https://tokens.whistle.ninja/api/tokens/${mint}`);
+                
+                if (r.ok) {
+                    const data = await r.json();
+                    customTokenData = data;
+                    displayCustomTokenInfo(data, mint);
+                } else {
+                    // Try our backend as fallback
+                    const r2 = await fetch(`/api/token/${mint}/status`);
+                    if (r2.ok) {
+                        const data2 = await r2.json();
+                        customTokenData = { 
+                            mint, 
+                            name: data2.name || 'Unknown',
+                            symbol: data2.symbol || '???',
+                            priceUSD: data2.priceUSD,
+                            priceSOL: data2.price,
+                            mcapUSD: data2.marketCapUSD,
+                            isGraduated: data2.migrated,
+                            image: data2.image
+                        };
+                        displayCustomTokenInfo(customTokenData, mint);
+                    } else {
+                        // Token might still be valid, just no data available
+                        customTokenData = { mint, name: 'Unknown Token', symbol: '???', priceUSD: 0, mcapUSD: 0 };
+                        displayCustomTokenInfo(customTokenData, mint);
+                    }
+                }
+            } catch (e) {
+                showError(`Failed to fetch token info: ${e.message}`);
+            } finally {
+                setLoading('btnCheckCustom', false);
+            }
+        }
+        
+        function displayCustomTokenInfo(data, mint) {
+            const infoDiv = document.getElementById('customTokenInfo');
+            const walletDiv = document.getElementById('customWalletSelect');
+            const btn = document.getElementById('btnStartCustomMM');
+            
+            // Show token info
+            infoDiv.style.display = 'block';
+            
+            // Image
+            const img = document.getElementById('customTokenImg');
+            if (data.image) {
+                img.src = data.image;
+                img.style.display = 'block';
+            } else {
+                img.style.display = 'none';
+            }
+            
+            // Name and symbol
+            document.getElementById('customTokenName').textContent = data.name || 'Unknown';
+            document.getElementById('customTokenSymbol').textContent = data.symbol || mint.slice(0, 8) + '...';
+            
+            // Status badge
+            const statusEl = document.getElementById('customTokenStatus');
+            if (data.isGraduated || data.migrated) {
+                statusEl.textContent = 'PumpSwap';
+                statusEl.style.background = 'rgba(224, 122, 58, 0.2)';
+                statusEl.style.color = 'var(--gold)';
+            } else {
+                statusEl.textContent = 'Bonding Curve';
+                statusEl.style.background = 'rgba(76, 175, 80, 0.2)';
+                statusEl.style.color = '#4CAF50';
+            }
+            
+            // Price and mcap
+            document.getElementById('customTokenPrice').textContent = data.priceUSD 
+                ? '$' + (data.priceUSD < 0.0001 ? data.priceUSD.toExponential(2) : data.priceUSD.toFixed(6))
+                : '-';
+            document.getElementById('customTokenMcap').textContent = data.mcapUSD 
+                ? '$' + formatNumber(data.mcapUSD) 
+                : '-';
+            document.getElementById('customTokenType').textContent = data.isGraduated ? 'Graduated' : 'Active';
+            
+            // Show wallet selection
+            walletDiv.style.display = 'block';
+            populateCustomPdaSelect();
+            
+            // Enable button
+            btn.disabled = false;
+        }
+        
+        async function populateCustomPdaSelect() {
+            const select = document.getElementById('customPdaSelect');
+            select.innerHTML = '<option value="">-- Select PDA Wallet --</option>';
+            
+            if (!S.ownerWallet) return;
+            
+            try {
+                const r = await fetch(`/api/contract/wallets?owner=${S.ownerWallet}`);
+                if (r.ok) {
+                    const wallets = await r.json();
+                    
+                    for (const w of wallets) {
+                        const opt = document.createElement('option');
+                        opt.value = w.pdaAddress;
+                        opt.textContent = `${w.pdaAddress.slice(0, 8)}... (${w.balance?.toFixed(4) || '?'} SOL)`;
+                        opt.dataset.balance = w.balance || 0;
+                        select.appendChild(opt);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load PDAs for custom MM:', e);
+            }
+        }
+        
+        // Update PDA balance display when selection changes
+        document.getElementById('customPdaSelect')?.addEventListener('change', async function() {
+            const balEl = document.getElementById('customPdaBal');
+            const opt = this.selectedOptions[0];
+            
+            if (opt && opt.dataset.balance) {
+                balEl.textContent = opt.dataset.balance + ' SOL';
+            } else {
+                balEl.textContent = '-';
+            }
+        });
+        
+        async function startCustomMM() {
+            if (!S.ownerWallet) {
+                showError('Please connect your wallet first');
+                return;
+            }
+            
+            if (!customTokenData || !customTokenData.mint) {
+                showError('Please check a token first');
+                return;
+            }
+            
+            const pdaSelect = document.getElementById('customPdaSelect');
+            const selectedPda = pdaSelect.value;
+            
+            if (!selectedPda) {
+                showError('Please select a PDA wallet to use');
+                return;
+            }
+            
+            setLoading('btnStartCustomMM', true);
+            
+            try {
+                addLog(`Starting custom MM for ${customTokenData.symbol || customTokenData.mint.slice(0,8)}...`, 'info');
+                
+                const r = await fetch('/api/persistent-bots/start-custom', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tokenMint: customTokenData.mint,
+                        pdaAddress: selectedPda,
+                        ownerWallet: S.ownerWallet,
+                        tokenName: customTokenData.name,
+                        tokenSymbol: customTokenData.symbol,
+                        isGraduated: customTokenData.isGraduated || customTokenData.migrated || false
+                    })
+                });
+                
+                const d = await r.json();
+                
+                if (!r.ok) {
+                    throw new Error(d.error || 'Failed to start custom MM');
+                }
+                
+                if (d.success) {
+                    addLog(`Custom MM started for ${customTokenData.symbol}!`, 'info');
+                    addLog(`Token: ${customTokenData.mint.slice(0,8)}... PDA: ${selectedPda.slice(0,8)}...`, 'info');
+                    
+                    showSuccess(`Custom Volume Bot Started!\n\nToken: ${customTokenData.name}\nPDA: ${selectedPda.slice(0,8)}...\n\nThe bot runs 24/7 on the server and will automatically:\n- Trade on ${d.tradingMode || 'bonding curve/PumpSwap'}\n- Resume when funds are deposited`);
+                    
+                    // Clear the form
+                    document.getElementById('customTokenMint').value = '';
+                    document.getElementById('customTokenInfo').style.display = 'none';
+                    document.getElementById('customWalletSelect').style.display = 'none';
+                    document.getElementById('btnStartCustomMM').disabled = true;
+                    customTokenData = null;
+                } else {
+                    throw new Error(d.error || 'Unknown error');
+                }
+            } catch (e) {
+                addLog(`Custom MM failed: ${e.message}`, 'error');
+                showError(e.message);
+            } finally {
+                setLoading('btnStartCustomMM', false);
+            }
+        }
+        
+        // Helper function
+        function formatNumber(num) {
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+            return num.toFixed(2);
+        }
         
         // Check if bot is already running for this token
         async function checkExistingBot() {

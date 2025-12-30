@@ -2672,6 +2672,86 @@ app.post('/api/persistent-bots/start', async (req, res) => {
     }
 });
 
+// Start custom MM for any token (not just created by PDA)
+app.post('/api/persistent-bots/start-custom', async (req, res) => {
+    const { tokenMint, pdaAddress, ownerWallet, tokenName, tokenSymbol, isGraduated } = req.body;
+    
+    if (!tokenMint || !pdaAddress || !ownerWallet) {
+        return res.status(400).json({ error: 'tokenMint, pdaAddress, and ownerWallet required' });
+    }
+    
+    if (!persistentBotManager) {
+        return res.status(400).json({ error: 'Bot manager not initialized' });
+    }
+    
+    try {
+        // Verify the PDA belongs to this owner
+        const contractWallet = db.prepare('SELECT * FROM contract_wallets WHERE pdaAddress = ? AND ownerWallet = ?')
+            .get(pdaAddress, ownerWallet);
+        
+        if (!contractWallet) {
+            return res.status(400).json({ error: 'PDA wallet not found or not owned by you' });
+        }
+        
+        // Check if bot already exists for this token+PDA combo
+        const existingBot = db.prepare('SELECT * FROM persistent_bots WHERE tokenMint = ? AND pdaAddress = ?')
+            .get(tokenMint, pdaAddress);
+        
+        if (existingBot) {
+            // Bot exists - just ensure it's running
+            const bot = await persistentBotManager.startBot(tokenMint, pdaAddress, ownerWallet);
+            return res.json({ 
+                success: true, 
+                status: bot.getStatus(),
+                message: 'Bot already exists - restarted',
+                tradingMode: isGraduated ? 'PumpSwap' : 'Bonding Curve'
+            });
+        }
+        
+        // Add to persistent_bots table
+        db.prepare(`
+            INSERT INTO persistent_bots (tokenMint, pdaAddress, ownerWallet, strategy, strategyConfig, status, createdAt, updatedAt)
+            VALUES (?, ?, ?, 'volume', '{}', 'running', datetime('now'), datetime('now'))
+        `).run(tokenMint, pdaAddress, ownerWallet);
+        
+        console.log(`[Custom MM] Created bot for ${tokenMint.slice(0,8)}... with PDA ${pdaAddress.slice(0,8)}...`);
+        
+        // Optionally save token info
+        if (tokenName || tokenSymbol) {
+            try {
+                // Check if token exists in tokens table
+                const existingToken = db.prepare('SELECT * FROM tokens WHERE mint = ?').get(tokenMint);
+                if (!existingToken) {
+                    db.prepare(`
+                        INSERT INTO tokens (mint, name, symbol, creatorWallet, createdAt)
+                        VALUES (?, ?, ?, ?, datetime('now'))
+                    `).run(tokenMint, tokenName || 'Unknown', tokenSymbol || 'UNK', 'external');
+                }
+            } catch (e) {
+                // Table might not have all columns, ignore
+            }
+        }
+        
+        // Start the bot
+        const bot = await persistentBotManager.startBot(tokenMint, pdaAddress, ownerWallet);
+        
+        // Mark the token as graduated in bot memory if needed
+        if (isGraduated && bot) {
+            bot.isGraduated = true;
+        }
+        
+        res.json({ 
+            success: true, 
+            status: bot.getStatus(),
+            tradingMode: isGraduated ? 'PumpSwap' : 'Bonding Curve (auto-detect)',
+            message: 'Custom volume bot started!'
+        });
+    } catch (e) {
+        console.error('[Custom MM] Error:', e);
+        res.status(400).json({ error: e.message });
+    }
+});
+
 // Get bot status for a specific owner's tokens
 app.get('/api/persistent-bots/owner/:ownerWallet', (req, res) => {
     if (!persistentBotManager) {
