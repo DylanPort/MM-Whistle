@@ -54,6 +54,19 @@ import {
 // Cache for discovered pools (mint -> pool address)
 const poolCache = new Map();
 
+// Fallback RPC for getProgramAccounts (public mainnet supports it)
+const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
+
+/**
+ * Set a known pool for a mint (useful when pool is already known)
+ */
+export function setKnownPool(mint, poolAddress) {
+    const mintStr = typeof mint === 'string' ? mint : mint.toBase58();
+    const poolPubkey = typeof poolAddress === 'string' ? new PublicKey(poolAddress) : poolAddress;
+    poolCache.set(mintStr, poolPubkey);
+    console.log(`[PumpSwap] Set known pool for ${mintStr}: ${poolPubkey.toBase58()}`);
+}
+
 /**
  * Find PumpSwap pool for a token mint
  * @param {Connection} connection - Main RPC connection
@@ -65,10 +78,12 @@ export async function findPumpSwapPool(connection, mint, indexedConnection = nul
     
     // Check cache first
     if (poolCache.has(mintStr)) {
-        return poolCache.get(mintStr);
+        const cachedPool = poolCache.get(mintStr);
+        console.log(`[PumpSwap] Using cached pool: ${cachedPool.toBase58()}`);
+        return cachedPool;
     }
     
-    // Try getProgramAccounts first (fastest if available)
+    // Try getProgramAccounts on the provided connection first
     const rpcToUse = indexedConnection || connection;
     try {
         const filters = [
@@ -92,7 +107,35 @@ export async function findPumpSwapPool(connection, mint, indexedConnection = nul
             return pool;
         }
     } catch (e) {
-        console.log(`[PumpSwap] getProgramAccounts failed, trying PDA derivation...`);
+        console.log(`[PumpSwap] getProgramAccounts failed on primary RPC: ${e.message}`);
+    }
+    
+    // Fallback: Try public mainnet RPC for getProgramAccounts
+    try {
+        console.log(`[PumpSwap] Trying fallback RPC for getProgramAccounts...`);
+        const fallbackConn = new Connection(FALLBACK_RPC);
+        const filters = [
+            {
+                memcmp: {
+                    offset: POOL_BASE_MINT_OFFSET,
+                    bytes: mintStr,
+                },
+            },
+        ];
+        
+        const accounts = await fallbackConn.getProgramAccounts(PUMP_AMM_PROGRAM, {
+            filters,
+            encoding: 'base64',
+        });
+        
+        if (accounts.length > 0) {
+            const pool = accounts[0].pubkey;
+            poolCache.set(mintStr, pool);
+            console.log(`[PumpSwap] Found pool via fallback RPC: ${pool.toBase58()}`);
+            return pool;
+        }
+    } catch (e) {
+        console.log(`[PumpSwap] Fallback RPC also failed: ${e.message}`);
     }
     
     // Fallback: Try deterministic PDA derivation

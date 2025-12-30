@@ -16,8 +16,9 @@ import {
     derivePumpFunAccountsFromMint,
     parseMmWalletAccount
 } from '../contract/index.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import * as bs58 from 'bs58';
+import { buyOnPumpSwap, sellOnPumpSwap, findPumpSwapPool, getPumpSwapPrice } from '../trading/pumpswap.js';
 
 // ============================================================================
 // PERSISTENT BOT CLASS
@@ -51,6 +52,10 @@ class PersistentBot {
             consecutiveFailures: 0,
             insufficientFundsCount: 0
         };
+        
+        // Track if token is graduated to PumpSwap/Raydium
+        this.isGraduated = false;
+        this.pumpSwapPool = null;
         
         // Default config
         this.config = {
@@ -211,14 +216,32 @@ class PersistentBot {
             
             // Get token status from bonding curve
             const tokenStatus = await getTokenStatus(conn, this.tokenMint);
-            if (!tokenStatus || tokenStatus.error) {
-                // Check if migrated to Raydium (bonding curve complete)
-                if (tokenStatus?.migrated) {
-                    this.log(`Token migrated to Raydium - bonding curve trading disabled`, 'warn');
-                    // TODO: Switch to PumpSwap trading for migrated tokens
+            
+            // Check if token has graduated to PumpSwap/Raydium
+            if (!tokenStatus || tokenStatus.error || tokenStatus.migrated) {
+                // Try to find PumpSwap pool
+                if (!this.isGraduated) {
+                    this.log(`Checking if token has graduated to PumpSwap... (mint: ${this.tokenMint})`, 'info');
+                    try {
+                        const mintPk = new PublicKey(this.tokenMint);
+                        this.log(`Searching for PumpSwap pool for mint: ${mintPk.toBase58()}`, 'info');
+                        const pool = await findPumpSwapPool(conn, mintPk);
+                        this.log(`PumpSwap pool search result: ${pool ? pool.toBase58() : 'null'}`, 'info');
+                        if (pool) {
+                            this.isGraduated = true;
+                            this.pumpSwapPool = pool;
+                            this.log(`✅ Token GRADUATED! Trading via PumpSwap AMM`, 'info');
+                            this.log(`Pool: ${pool.toBase58()}`, 'info');
+                        } else {
+                            this.log(`Token status unavailable and no PumpSwap pool found - will retry`, 'warn');
+                            return;
+                        }
+                    } catch (e) {
+                        this.log(`PumpSwap pool check failed: ${e.message}`, 'error');
+                        this.log(`Error stack: ${e.stack}`, 'error');
+                        return;
+                    }
                 }
-                this.log(`Token status unavailable - will retry`, 'warn');
-                return;
             }
             
             // Check if bonding curve's ATA exists (required for trading)
@@ -336,7 +359,7 @@ class PersistentBot {
                 return;
             }
             
-            // OPTION 2: PDA trading via contract
+            // OPTION 2: PDA trading via contract (or PumpSwap for graduated tokens)
             // Vault should pay all fees per user's contract design
             // Operator is only needed as signer, not for fees
             if (!operatorKeypair) {
@@ -345,17 +368,28 @@ class PersistentBot {
             }
             
             // mmWalletInfo already fetched above for on-chain config
-            // Derive pump.fun accounts
             const mintPubkey = new PublicKey(this.tokenMint);
-            const pumpAccounts = derivePumpFunAccountsFromMint(mintPubkey);
             
-            // TRADE VIA PDA
-            this.log(`Trading via PDA: ${this.pdaAddress.slice(0,8)}...`, 'info');
-            
-            if (actuallyBuy) {
-                await this._executeBuyViaContract(conn, operatorKeypair, mmWalletInfo, pumpAccounts, tradeAmount, tokenStatus);
+            // Check if token is graduated - use PumpSwap AMM
+            if (this.isGraduated) {
+                this.log(`Trading via PumpSwap (graduated token)`, 'info');
+                
+                if (actuallyBuy) {
+                    await this._executeBuyViaPumpSwap(conn, operatorKeypair, mmWalletInfo, tradeAmount);
+                } else {
+                    await this._executeSellViaPumpSwap(conn, operatorKeypair, mmWalletInfo, tokenBalance * 0.5);
+                }
             } else {
-                await this._executeSellViaContract(conn, operatorKeypair, mmWalletInfo, pumpAccounts, tokenBalance * 0.5, tokenStatus);
+                // Non-graduated - use Pump.fun bonding curve via contract
+                const pumpAccounts = derivePumpFunAccountsFromMint(mintPubkey);
+                
+                this.log(`Trading via PDA: ${this.pdaAddress.slice(0,8)}...`, 'info');
+                
+                if (actuallyBuy) {
+                    await this._executeBuyViaContract(conn, operatorKeypair, mmWalletInfo, pumpAccounts, tradeAmount, tokenStatus);
+                } else {
+                    await this._executeSellViaContract(conn, operatorKeypair, mmWalletInfo, pumpAccounts, tokenBalance * 0.5, tokenStatus);
+                }
             }
             
             // Wait before next trade
@@ -364,6 +398,25 @@ class PersistentBot {
             
         } catch (e) {
             this.log(`Trade error: ${e.message}`, 'error');
+            
+            // Check for BondingCurveComplete error - indicates token graduated
+            if (e.message.includes('BondingCurveComplete') || e.message.includes('0x1775') || e.message.includes('6005')) {
+                this.log(`🎓 Detected BondingCurveComplete - token has GRADUATED to PumpSwap!`, 'info');
+                this.isGraduated = true;
+                
+                // Try to find the PumpSwap pool
+                try {
+                    const conn = this.manager.getConnection();
+                    const pool = await findPumpSwapPool(conn, new PublicKey(this.tokenMint));
+                    if (pool) {
+                        this.pumpSwapPool = pool;
+                        this.log(`✅ Found PumpSwap pool: ${pool.toBase58()}`, 'info');
+                        this.log(`Next trade will use PumpSwap AMM`, 'info');
+                    }
+                } catch (poolError) {
+                    this.log(`Could not find PumpSwap pool: ${poolError.message}`, 'warn');
+                }
+            }
         }
     }
     
@@ -518,6 +571,108 @@ class PersistentBot {
         }
     }
     
+    /**
+     * Execute BUY via PumpSwap AMM (for graduated tokens)
+     * Uses operator wallet to trade, then transfers tokens to vault
+     */
+    async _executeBuyViaPumpSwap(conn, operatorKeypair, mmWalletInfo, tradeAmount) {
+        try {
+            this.log(`BUY ${tradeAmount.toFixed(4)} SOL via PumpSwap`, 'trade');
+            
+            // Get current price from PumpSwap
+            const priceInfo = await getPumpSwapPrice(conn, new PublicKey(this.tokenMint));
+            if (!priceInfo) {
+                throw new Error('Could not get PumpSwap price');
+            }
+            
+            const expectedTokens = Math.floor((tradeAmount / priceInfo.price) * 1e6);
+            this.log(`PumpSwap price: ${priceInfo.price.toFixed(12)} SOL/token, expected: ${(expectedTokens / 1e6).toFixed(2)} tokens`, 'info');
+            
+            // Execute buy via PumpSwap (operator pays and receives tokens)
+            const signature = await buyOnPumpSwap(
+                conn, 
+                operatorKeypair, 
+                new PublicKey(this.tokenMint), 
+                tradeAmount, 
+                this.config.slippage
+            );
+            
+            this.stats.totalTrades++;
+            this.stats.totalVolume += tradeAmount;
+            this.stats.lastTrade = { type: 'buy', amount: tradeAmount, time: Date.now(), signature };
+            this._updateDB();
+            
+            // Record vault trade time for shared rate limiting
+            this.manager.recordVaultTrade(mmWalletInfo.vault.toBase58());
+            
+            this.log(`PUMPSWAP BUY SUCCESS: ${signature.slice(0, 20)}...`, 'trade');
+            
+        } catch (e) {
+            this.log(`PumpSwap buy failed: ${e.message}`, 'error');
+            
+            // If it's a "pool not found" error, mark as non-graduated
+            if (e.message.includes('pool not found')) {
+                this.isGraduated = false;
+                this.pumpSwapPool = null;
+                this.log(`Token may not be graduated - switching back to bonding curve`, 'warn');
+            }
+            
+            throw e;
+        }
+    }
+    
+    /**
+     * Execute SELL via PumpSwap AMM (for graduated tokens)
+     * Uses operator wallet to sell tokens
+     */
+    async _executeSellViaPumpSwap(conn, operatorKeypair, mmWalletInfo, tokenAmount) {
+        try {
+            const tokenAmountRaw = Math.floor(tokenAmount * 1e6);
+            
+            this.log(`SELL ${tokenAmount.toFixed(2)} tokens via PumpSwap`, 'trade');
+            
+            // Get current price from PumpSwap
+            const priceInfo = await getPumpSwapPrice(conn, new PublicKey(this.tokenMint));
+            if (!priceInfo) {
+                throw new Error('Could not get PumpSwap price');
+            }
+            
+            const expectedSol = tokenAmount * priceInfo.price;
+            this.log(`PumpSwap price: ${priceInfo.price.toFixed(12)} SOL/token, expected: ${expectedSol.toFixed(6)} SOL`, 'info');
+            
+            // Execute sell via PumpSwap (operator sells tokens)
+            const signature = await sellOnPumpSwap(
+                conn,
+                operatorKeypair,
+                new PublicKey(this.tokenMint),
+                tokenAmountRaw,
+                this.config.slippage
+            );
+            
+            this.stats.totalTrades++;
+            this.stats.totalVolume += expectedSol;
+            this.stats.lastTrade = { type: 'sell', amount: tokenAmount, time: Date.now(), signature };
+            this._updateDB();
+            
+            // Record vault trade time for shared rate limiting
+            this.manager.recordVaultTrade(mmWalletInfo.vault.toBase58());
+            
+            this.log(`PUMPSWAP SELL SUCCESS: ${signature.slice(0, 20)}...`, 'trade');
+            
+        } catch (e) {
+            this.log(`PumpSwap sell failed: ${e.message}`, 'error');
+            
+            // If it's a "pool not found" error, mark as non-graduated
+            if (e.message.includes('pool not found')) {
+                this.isGraduated = false;
+                this.pumpSwapPool = null;
+                this.log(`Token may not be graduated - switching back to bonding curve`, 'warn');
+            }
+            
+            throw e;
+        }
+    }
+    
     async _getMmWalletInfo() {
         try {
             const conn = this.manager.getConnection();
@@ -653,8 +808,36 @@ class PersistentBot {
             const conn = this.manager.getConnection();
             const mintPubkey = new PublicKey(this.tokenMint);
             
-            // Tokens are in the VAULT PDA, not the mmWallet PDA!
-            // Derive vault from owner/nonce
+            // Detect token program first
+            const { getAssociatedTokenAddress: getAta, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token');
+            const mintInfo = await conn.getAccountInfo(mintPubkey);
+            const tokenProgram = mintInfo?.owner?.equals(TOKEN_2022_PROGRAM_ID) 
+                ? TOKEN_2022_PROGRAM_ID 
+                : TOKEN_PROGRAM_ID;
+            
+            // For graduated tokens, also check operator's balance
+            if (this.isGraduated && this.manager.operatorKeypair) {
+                const operatorAta = await getAta(
+                    mintPubkey,
+                    this.manager.operatorKeypair.publicKey,
+                    false,
+                    tokenProgram
+                );
+                
+                try {
+                    const balanceInfo = await conn.getTokenAccountBalance(operatorAta);
+                    const balance = balanceInfo.value.uiAmount || 0;
+                    if (balance > 0) {
+                        this.log(`Token balance (operator): ${balance.toFixed(2)}`, 'info');
+                    }
+                    return balance;
+                } catch (ataError) {
+                    // ATA doesn't exist - no tokens
+                    return 0;
+                }
+            }
+            
+            // Non-graduated: Tokens are in the VAULT PDA
             const contractWallet = this.manager.db.prepare('SELECT * FROM contract_wallets WHERE pdaAddress = ?').get(this.pdaAddress);
             if (!contractWallet) return 0;
             
@@ -662,17 +845,7 @@ class PersistentBot {
             const nonce = contractWallet.nonce || 0;
             const { pda: vault } = getPdaWalletAddress(ownerPubkey, nonce);
             
-            // Derive the ATA directly instead of using getParsedTokenAccountsByOwner
-            // (some RPCs don't support the secondary index lookup)
-            const { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token');
-            
-            // Detect token program
-            const mintInfo = await conn.getAccountInfo(mintPubkey);
-            const tokenProgram = mintInfo?.owner?.equals(TOKEN_2022_PROGRAM_ID) 
-                ? TOKEN_2022_PROGRAM_ID 
-                : TOKEN_PROGRAM_ID;
-            
-            const vaultAta = await getAssociatedTokenAddress(
+            const vaultAta = await getAta(
                 mintPubkey,
                 vault,
                 true, // allowOwnerOffCurve for PDAs
